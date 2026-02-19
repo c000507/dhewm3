@@ -33,6 +33,7 @@ If you have questions concerning this license or the applicable additional terms
 class idOpenGLRenderGpuCommandContext : public idRenderGpuCommandContext {
 public:
 	virtual void BindPipeline( idRenderGpuPipeline * ) {
+		// OpenGL fixed-function path does not use explicit pipeline objects here.
 	}
 
 	virtual void SetBlendEnabled( bool enabled ) {
@@ -70,6 +71,7 @@ public:
 
 class idNoopRenderGpuCommandContext : public idRenderGpuCommandContext {
 public:
+	// no-op command context used by backend stubs that are not implemented yet
 	virtual void BindPipeline( idRenderGpuPipeline * ) {
 	}
 	virtual void SetBlendEnabled( bool ) {

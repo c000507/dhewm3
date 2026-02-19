@@ -534,6 +534,7 @@ const void	RB_SwapBuffers( const void *data ) {
 	}
 
 	D3::ImGuiHooks::EndFrame();
+	idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
 
 	int fillAlpha = r_fillWindowAlphaChan.GetInteger();
 	if ( fillAlpha == 1 || (fillAlpha == -1 && glConfig.shouldFillWindowAlpha) )
@@ -544,7 +545,6 @@ const void	RB_SwapBuffers( const void *data ) {
 		bool blendEnabled = qglIsEnabled( GL_BLEND );
 		if ( !blendEnabled )
 		{
-			idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
 			if ( cmdCtx != NULL ) {
 				cmdCtx->SetBlendEnabled( true );
 			} else {
@@ -557,7 +557,6 @@ const void	RB_SwapBuffers( const void *data ) {
 		bool scissorEnabled = qglIsEnabled( GL_SCISSOR_TEST );
 		if( scissorEnabled )
 		{
-			idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
 			if ( cmdCtx != NULL ) {
 				cmdCtx->SetScissorEnabled( false );
 			} else {
@@ -568,7 +567,6 @@ const void	RB_SwapBuffers( const void *data ) {
 		bool tex2Denabled = qglIsEnabled( GL_TEXTURE_2D );
 		if( tex2Denabled )
 		{
-			idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
 			if ( cmdCtx != NULL ) {
 				cmdCtx->SetTexture2DEnabled( false );
 			} else {
@@ -579,7 +577,6 @@ const void	RB_SwapBuffers( const void *data ) {
 		qglDisable( GL_VERTEX_PROGRAM_ARB );
 		qglDisable( GL_FRAGMENT_PROGRAM_ARB );
 
-		idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
 		if ( cmdCtx != NULL ) {
 			cmdCtx->SetBlendEquationAdd();
 		} else {
@@ -651,7 +648,6 @@ const void	RB_SwapBuffers( const void *data ) {
 
 	// force a gl sync if requested
 	if ( r_finish.GetBool() ) {
-		idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
 		if ( cmdCtx != NULL ) {
 			cmdCtx->Finish();
 		} else {
