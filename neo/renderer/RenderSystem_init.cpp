@@ -40,6 +40,7 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "renderer/tr_local.h"
 #include "renderer/RenderBackendPlatform.h"
+#include "renderer/RenderImGui.h"
 
 #include "framework/GameCallbacks_local.h"
 #include "framework/Game.h"
@@ -2314,6 +2315,7 @@ idRenderSystemLocal::Clear
 void idRenderSystemLocal::Clear( void ) {
 	registered = false;
 	backendPlatform = NULL;
+	imguiBackend = NULL;
 	frameCount = 0;
 	viewCount = 0;
 	staticAllocCount = 0;
@@ -2484,6 +2486,9 @@ void idRenderSystemLocal::InitBackend( void ) {
 	if ( backendPlatform == NULL ) {
 		backendPlatform = R_GetRenderBackendPlatform();
 	}
+	if ( imguiBackend == NULL ) {
+		imguiBackend = CreateRenderImGuiBackend();
+	}
 	// if OpenGL isn't started, start it now
 	if ( !glConfig.isInitialized ) {
 		int	err;
@@ -2505,6 +2510,8 @@ idRenderSystemLocal::ShutdownBackend
 ========================
 */
 void idRenderSystemLocal::ShutdownBackend( void ) {
+	delete imguiBackend;
+	imguiBackend = NULL;
 
 	R_ShutdownFrameData();
 
@@ -2557,4 +2564,58 @@ idRenderSystemLocal::GetScreenHeight
 */
 int idRenderSystemLocal::GetScreenHeight( void ) const {
 	return glConfig.vidHeight;
+}
+
+/*
+========================
+idRenderSystemLocal::GetModeInfo
+========================
+*/
+bool idRenderSystemLocal::GetModeInfo( int *width, int *height, int mode ) const {
+	return R_GetModeInfo( width, height, mode );
+}
+
+/*
+========================
+idRenderSystemLocal::GetCustomWidth
+========================
+*/
+int idRenderSystemLocal::GetCustomWidth() const {
+	return r_customWidth.GetInteger();
+}
+
+/*
+========================
+idRenderSystemLocal::GetCustomHeight
+========================
+*/
+int idRenderSystemLocal::GetCustomHeight() const {
+	return r_customHeight.GetInteger();
+}
+
+/*
+========================
+idRenderSystemLocal::SetCustomWidth
+========================
+*/
+void idRenderSystemLocal::SetCustomWidth( int width ) {
+	r_customWidth.SetInteger( width );
+}
+
+/*
+========================
+idRenderSystemLocal::SetCustomHeight
+========================
+*/
+void idRenderSystemLocal::SetCustomHeight( int height ) {
+	r_customHeight.SetInteger( height );
+}
+
+/*
+========================
+idRenderSystemLocal::GetImGuiBackend
+========================
+*/
+idRenderImGuiBackend* idRenderSystemLocal::GetImGuiBackend() {
+	return imguiBackend;
 }

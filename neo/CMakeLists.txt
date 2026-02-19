@@ -623,6 +623,7 @@ set(src_renderer
 	renderer/Model_sprite.cpp
 	renderer/RenderBackendPlatform.cpp
 	renderer/RenderEntity.cpp
+	renderer/RenderImGui.cpp
 	renderer/RenderSystem.cpp
 	renderer/RenderSystem_init.cpp
 	renderer/RenderWorld.cpp

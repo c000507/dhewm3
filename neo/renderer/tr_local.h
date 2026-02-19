@@ -38,6 +38,7 @@ class idScreenRect; // yay for include recursion
 #include "renderer/ModelOverlay.h"
 #include "renderer/RenderSystem.h"
 #include "renderer/RenderWorld.h"
+#include "sys/sys_glimp.h"
 
 class idRenderWorldLocal;
 class idRenderBackendPlatform;
@@ -812,6 +813,14 @@ public:
 	virtual void			UnCrop();
 	virtual bool			UploadImage( const char *imageName, const byte *data, int width, int height );
 
+	virtual bool			GetModeInfo( int *width, int *height, int mode ) const;
+	virtual int				GetCustomWidth() const;
+	virtual int				GetCustomHeight() const;
+	virtual void			SetCustomWidth( int width );
+	virtual void			SetCustomHeight( int height );
+
+	virtual idRenderImGuiBackend* GetImGuiBackend();
+
 public:
 	// internal functions
 							idRenderSystemLocal( void );
@@ -825,6 +834,7 @@ public:
 	// renderer globals
 	bool					registered;		// cleared at shutdown, set at InitBackend
 	idRenderBackendPlatform* backendPlatform;
+	idRenderImGuiBackend*	imguiBackend;
 
 	bool					takingScreenshot;
 
@@ -1205,17 +1215,9 @@ void		GLimp_DeactivateContext( void );
 // being immediate returns, which lets us guage how much time is
 // being spent inside OpenGL.
 
-const int GRAB_GRABMOUSE	= (1 << 0);
-const int GRAB_HIDECURSOR	= (1 << 1);
-const int GRAB_RELATIVEMOUSE = (1 << 2);
-const int GRAB_ENABLETEXTINPUT = (1 << 3); // only used with SDL3, where textinput must be explicitly activated
-
-void GLimp_GrabInput(int flags);
-
 bool GLimp_SetSwapInterval( int swapInterval );
 int GLimp_GetSwapInterval();
 bool GLimp_SetWindowResizable( bool enableResizable );
-void GLimp_UpdateWindowSize();
 
 glimpParms_t GLimp_GetCurState();
 float GLimp_GetDisplayRefresh();

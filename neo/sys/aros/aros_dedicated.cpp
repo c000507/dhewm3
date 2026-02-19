@@ -27,7 +27,7 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "sys/platform.h"
-#include "renderer/tr_local.h"
+#include "renderer/RenderSystem.h"
 #include "sys/aros/aros_public.h"
 
 #include "sys/aros/aros_local.h"

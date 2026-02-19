@@ -97,6 +97,7 @@ const int SCREEN_WIDTH			= 640;
 const int SCREEN_HEIGHT			= 480;
 
 class idRenderWorld;
+class idRenderImGuiBackend;
 
 enum { DHEWM_RENDER_SYSTEM_API_VERSION = 1 };
 
@@ -234,6 +235,18 @@ public:
 	// texture filter / mipmapping / repeat won't be modified by the upload
 	// returns false if the image wasn't found
 	virtual bool			UploadImage( const char *imageName, const byte *data, int width, int height ) = 0;
+
+	// video mode queries - allows code outside the renderer to query/set mode info
+	// without including renderer internals
+	virtual bool			GetModeInfo( int *width, int *height, int mode ) const = 0;
+	virtual int				GetCustomWidth() const = 0;
+	virtual int				GetCustomHeight() const = 0;
+	virtual void			SetCustomWidth( int width ) = 0;
+	virtual void			SetCustomHeight( int height ) = 0;
+
+	// ImGui rendering backend - allows sys_imgui.cpp to use the renderer-specific
+	// ImGui backend without including renderer internals
+	virtual idRenderImGuiBackend* GetImGuiBackend() = 0;
 };
 
 extern idRenderSystem *			renderSystem;

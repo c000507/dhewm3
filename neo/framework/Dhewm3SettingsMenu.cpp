@@ -18,17 +18,21 @@
 #include "sys/sys_imgui.h"
 #include "../libs/imgui/imgui_internal.h"
 
-#include "renderer/tr_local.h" // render cvars
+#include "renderer/RenderSystem.h"
 #include "sound/snd_local.h" // sound cvars
 
 extern const char* D3_GetGamepadStartButtonName();
 
 extern idCVar imgui_style;
 
-extern idCVar r_customWidth;
-extern idCVar r_customHeight;
-
-extern bool R_GetModeInfo( int *width, int *height, int mode );
+// render cvars used directly (defined in RenderSystem_init.cpp)
+extern idCVar r_mode;
+extern idCVar r_fullscreen;
+extern idCVar r_fullscreenDesktop;
+extern idCVar r_multiSamples;
+extern idCVar r_swapInterval;
+extern idCVar r_enableDepthCapture;
+extern idCVar r_useSoftParticles;
 
 namespace {
 
@@ -1712,19 +1716,33 @@ static int initialUsePrecomprTextures = 0;
 static int initialUseCompression = 0;
 static int initialUseNormalCompr = 0;
 
+// image quality cvars accessed through the cvar system (they're members of idImageManager)
+static idCVar* imgCvar_usePrecompressedTextures = NULL;
+static idCVar* imgCvar_useCompression = NULL;
+static idCVar* imgCvar_useNormalCompression = NULL;
+
+static void EnsureImageCvars() {
+	if ( imgCvar_usePrecompressedTextures == NULL ) {
+		imgCvar_usePrecompressedTextures = cvarSystem->Find( "image_usePrecompressedTextures" );
+		imgCvar_useCompression = cvarSystem->Find( "image_useCompression" );
+		imgCvar_useNormalCompression = cvarSystem->Find( "image_useNormalCompression" );
+	}
+}
+
 static void SetVideoStuffFromCVars()
 {
+	EnsureImageCvars();
 	const int curMode = r_mode.GetInteger();
 	initialMode = curMode;
 	int w, h;
-	if ( !R_GetModeInfo( &w, &h, curMode ) ) {
+	if ( !renderSystem->GetModeInfo( &w, &h, curMode ) ) {
 		// invalid mode
 		initialMode = (curMode < 0) ? -1 : 4; // safe default (800x600)
 		r_mode.SetInteger( initialMode );
 	}
 
-	initialCustomVidRes[0] = r_customWidth.GetInteger();
-	initialCustomVidRes[1] = r_customHeight.GetInteger();
+	initialCustomVidRes[0] = renderSystem->GetCustomWidth();
+	initialCustomVidRes[1] = renderSystem->GetCustomHeight();
 
 	initialFullscreen = r_fullscreen.GetBool();
 	initialFullscreenDesktop = r_fullscreenDesktop.GetBool();
@@ -1740,9 +1758,9 @@ static void SetVideoStuffFromCVars()
 			qualityPreset = 1; // default to medium Quality
 	}
 
-	initialUsePrecomprTextures = globalImages->image_usePrecompressedTextures.GetInteger();
-	initialUseCompression = globalImages->image_useCompression.GetInteger();
-	initialUseNormalCompr = globalImages->image_useNormalCompression.GetInteger();
+	initialUsePrecomprTextures = (*imgCvar_usePrecompressedTextures).GetInteger();
+	initialUseCompression = (*imgCvar_useCompression).GetInteger();
+	initialUseNormalCompr = (*imgCvar_useNormalCompression).GetInteger();
 }
 
 static bool VideoHasResettableChanges()
@@ -1750,8 +1768,8 @@ static bool VideoHasResettableChanges()
 	const int curMode = r_mode.GetInteger();
 	if ( curMode != initialMode )
 		return true;
-	if ( curMode == -1 && ( initialCustomVidRes[0] != r_customWidth.GetInteger()
-	                     || initialCustomVidRes[1] != r_customHeight.GetInteger() ) )
+	if ( curMode == -1 && ( initialCustomVidRes[0] != renderSystem->GetCustomWidth()
+	                     || initialCustomVidRes[1] != renderSystem->GetCustomHeight() ) )
 	{
 		return true;
 	}
@@ -1763,13 +1781,13 @@ static bool VideoHasResettableChanges()
 	if ( initialMSAAmode != r_multiSamples.GetInteger() ) {
 		return true;
 	}
-	if ( initialUsePrecomprTextures != globalImages->image_usePrecompressedTextures.GetInteger() ) {
+	if ( initialUsePrecomprTextures != (*imgCvar_usePrecompressedTextures).GetInteger() ) {
 		return true;
 	}
-	if( initialUseCompression != globalImages->image_useCompression.GetInteger() ) {
+	if( initialUseCompression != (*imgCvar_useCompression).GetInteger() ) {
 		return true;
 	}
-	if ( initialUseNormalCompr != globalImages->image_useNormalCompression.GetInteger() ) {
+	if ( initialUseNormalCompr != (*imgCvar_useNormalCompression).GetInteger() ) {
 		return true;
 	}
 
@@ -1781,7 +1799,7 @@ static bool VideoHasApplyableChanges()
 	renderBackendState_t curState;
 	renderSystem->GetBackendState( curState );
 	int wantedWidth = 0, wantedHeight = 0;
-	R_GetModeInfo( &wantedWidth, &wantedHeight, r_mode.GetInteger() );
+	renderSystem->GetModeInfo( &wantedWidth, &wantedHeight, r_mode.GetInteger() );
 	if ( wantedWidth != curState.width || wantedHeight != curState.height ) {
 		return true;
 	}
@@ -1794,13 +1812,13 @@ static bool VideoHasApplyableChanges()
 		return true;
 	}
 
-	if ( initialUsePrecomprTextures != globalImages->image_usePrecompressedTextures.GetInteger() ) {
+	if ( initialUsePrecomprTextures != (*imgCvar_usePrecompressedTextures).GetInteger() ) {
 		return true;
 	}
 	// Note: value of image_useNormalCompression is only relevant if image_usePrecompressedTextures is enabled
 	if ( initialUsePrecomprTextures
-	    && (initialUseNormalCompr != globalImages->image_useNormalCompression.GetInteger()
-	       || initialUseCompression != globalImages->image_useCompression.GetInteger()) )
+	    && (initialUseNormalCompr != (*imgCvar_useNormalCompression).GetInteger()
+	       || initialUseCompression != (*imgCvar_useCompression).GetInteger()) )
 	{
 		return true;
 	}
@@ -1812,9 +1830,9 @@ static bool VideoHasApplyableChanges()
 static void ApplyVideoSettings()
 {
 	const char* cmd = "vid_restart partial\n";
-	if ( initialUsePrecomprTextures != globalImages->image_usePrecompressedTextures.GetInteger()
-	    || initialUseNormalCompr != globalImages->image_useNormalCompression.GetInteger()
-	    || initialUseCompression != globalImages->image_useCompression.GetInteger() )
+	if ( initialUsePrecomprTextures != (*imgCvar_usePrecompressedTextures).GetInteger()
+	    || initialUseNormalCompr != (*imgCvar_useNormalCompression).GetInteger()
+	    || initialUseCompression != (*imgCvar_useCompression).GetInteger() )
 	{
 		// these need a full restart (=> textures must be reloaded)
 		cmd = "vid_restart\n";
@@ -1825,16 +1843,16 @@ static void ApplyVideoSettings()
 static void VideoResetChanges()
 {
 	r_mode.SetInteger( initialMode );
-	r_customWidth.SetInteger( initialCustomVidRes[0] );
-	r_customHeight.SetInteger( initialCustomVidRes[1] );
+	renderSystem->SetCustomWidth( initialCustomVidRes[0] );
+	renderSystem->SetCustomHeight( initialCustomVidRes[1] );
 
 	r_fullscreen.SetBool( initialFullscreen );
 	r_fullscreenDesktop.SetBool( initialFullscreenDesktop );
 
 	r_multiSamples.SetInteger( initialMSAAmode );
-	globalImages->image_usePrecompressedTextures.SetInteger( initialUsePrecomprTextures );
-	globalImages->image_useCompression.SetInteger( initialUseCompression );
-	globalImages->image_useNormalCompression.SetInteger( initialUseNormalCompr );
+	(*imgCvar_usePrecompressedTextures).SetInteger( initialUsePrecomprTextures );
+	(*imgCvar_useCompression).SetInteger( initialUseCompression );
+	(*imgCvar_useNormalCompression).SetInteger( initialUseNormalCompr );
 }
 
 static void InitVideoOptionsMenu()
@@ -1846,7 +1864,7 @@ static void InitVideoOptionsMenu()
 	// modes 0-2 are not shown in the menu, probably too small
 	for( int m=3; ; ++m ) {
 		int w=0, h=0;
-		if( ! R_GetModeInfo(&w, &h, m) )
+		if( ! renderSystem->GetModeInfo(&w, &h, m) )
 			break;
 		vidModes.Append( VidMode(w, h, m) );
 	}
@@ -1909,7 +1927,7 @@ static void DrawVideoOptionsMenu()
 	if ( selMode != curMode ) {
 		selMode = curMode;
 		int w, h;
-		if ( !R_GetModeInfo( &w, &h, curMode ) ) {
+		if ( !renderSystem->GetModeInfo( &w, &h, curMode ) ) {
 			// invalid mode
 			selMode = (curMode < 0) ? -1 : 4; // safe default (800x600)
 			r_mode.SetInteger( selMode );
@@ -1936,12 +1954,12 @@ static void DrawVideoOptionsMenu()
 	AddTooltip( "r_mode" );
 
 	if ( selMode == -1 ) {
-		int vidRes[2] = { r_customWidth.GetInteger(), r_customHeight.GetInteger() };
+		int vidRes[2] = { renderSystem->GetCustomWidth(), renderSystem->GetCustomHeight() };
 		if ( ImGui::InputInt2( "Custom Resolution (width x height)", vidRes ) ) {
 			vidRes[0] = idMath::ClampInt( 1, 128000, vidRes[0] );
 			vidRes[1] = idMath::ClampInt( 1, 128000, vidRes[1] );
-			r_customWidth.SetInteger( vidRes[0] );
-			r_customHeight.SetInteger( vidRes[1] );
+			renderSystem->SetCustomWidth( vidRes[0] );
+			renderSystem->SetCustomHeight( vidRes[1] );
 		}
 		AddTooltip( "r_customWidth / r_customHeight" );
 	}
@@ -1981,11 +1999,11 @@ static void DrawVideoOptionsMenu()
 	}
 	AddCVarOptionTooltips( r_multiSamples, "Note: Not all GPUs/drivers support all modes, esp. not 16x!" );
 
-	int usePreComprTex = globalImages->image_usePrecompressedTextures.GetInteger();
+	int usePreComprTex = (*imgCvar_usePrecompressedTextures).GetInteger();
 	if ( ImGui::Combo( "Use precompressed (.dds) textures", &usePreComprTex,
 	                   "No, only uncompressed\0Yes, no matter which format\0Only if high quality (BPCT/BC7)\0" ) )
 	{
-		globalImages->image_usePrecompressedTextures.SetInteger(usePreComprTex);
+		(*imgCvar_usePrecompressedTextures).SetInteger(usePreComprTex);
 		// by default I guess people also want compressed normal maps when using this
 		// especially relevant for retexturing packs that only ship BC7 DDS files
 		// (otherwise the lowres TGA normalmaps would be used)
@@ -1995,29 +2013,29 @@ static void DrawVideoOptionsMenu()
 	}
 	const char* descr = "Use precompressed (.dds) textures. Faster loading, use less VRAM, possibly worse image quality.\n"
 			"May also be used by highres retexturing packs for BC7-compressed textures (there image quality is not noticeably impaired)";
-	AddCVarOptionTooltips( globalImages->image_usePrecompressedTextures, descr );
+	AddCVarOptionTooltips( (*imgCvar_usePrecompressedTextures), descr );
 
-	int useCompression = globalImages->image_useCompression.GetInteger();
+	int useCompression = (*imgCvar_useCompression).GetInteger();
 	if ( ImGui::Combo( "Compress uncompressed textures on load", &useCompression,
 	                   "Leave uncompressed (best quality)\0Compress with S3TC (aka DXT aka BC1-3)\0Compress with BPCT (BC7)\0" ) )
 	{
-		globalImages->image_useCompression.SetInteger(useCompression);
+		(*imgCvar_useCompression).SetInteger(useCompression);
 	}
 	descr = "When loading non-precompressed textures, compress them so they use less VRAM.\n"
 			"Uncompressed has best quality. BC7 has better quality than S3TC, but may increase loading times";
-	AddCVarOptionTooltips( globalImages->image_useCompression, descr );
+	AddCVarOptionTooltips( (*imgCvar_useCompression), descr );
 
 	ImGui::BeginDisabled( !usePreComprTex && !useCompression );
-	bool useNormalCompr = globalImages->image_useNormalCompression.GetBool();
+	bool useNormalCompr = (*imgCvar_useNormalCompression).GetBool();
 	if ( ImGui::Checkbox( "Use compressed normalmaps", &useNormalCompr ) ) {
 		// image_useNormalCompression 1 is not supported by modern GPUs
-		globalImages->image_useNormalCompression.SetInteger(useNormalCompr ? 2 : 0);
+		(*imgCvar_useNormalCompression).SetInteger(useNormalCompr ? 2 : 0);
 	}
 	if ( usePreComprTex ) {
 		const char* descr = "Also use precompressed textures for normalmaps or compress them on load.\n"
 		                    "Uncompressed often has better quality, but uses more VRAM.\n"
 		                    "When using highres retexturing packs, you should definitely enable this.";
-		AddCVarOptionTooltips( globalImages->image_useNormalCompression, descr );
+		AddCVarOptionTooltips( (*imgCvar_useNormalCompression), descr );
 	} else {
 		AddTooltip( "Can only be used if (pre)compressed textures are enabled!" );
 	}

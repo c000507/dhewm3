@@ -29,7 +29,6 @@ If you have questions concerning this license or the applicable additional terms
 #define __AROS_LOCAL_H__
 
 #include "renderer/RenderSystem.h"
-#include "renderer/tr_local.h"
 
 // input.cpp
 void Sys_XEvents();

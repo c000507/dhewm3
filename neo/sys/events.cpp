@@ -36,7 +36,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "framework/KeyInput.h"
 #include "framework/Session_local.h"
 #include "renderer/RenderSystem.h"
-#include "renderer/tr_local.h"
+#include "sys/sys_glimp.h"
 
 #include "sys/sys_public.h"
 #include "sys/sys_imgui.h"
