@@ -373,7 +373,7 @@ void idRenderSystemLocal::GetBackendInfo( renderBackendInfo_t &info ) const {
 	info.vidWidth = glConfig.vidWidth;
 	info.vidHeight = glConfig.vidHeight;
 	info.debugOutputAvailable = glConfig.glDebugOutputAvailable;
-	info.hasDebugContext = glConfig.haveDebugContext;
+	info.debugContextAvailable = glConfig.haveDebugContext;
 }
 
 /*

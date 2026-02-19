@@ -106,7 +106,7 @@ typedef struct renderBackendInfo_s {
 	float				winWidth, winHeight;
 	int					vidWidth, vidHeight;
 	bool				debugOutputAvailable;
-	bool				hasDebugContext;
+	bool				debugContextAvailable;
 } renderBackendInfo_t;
 
 

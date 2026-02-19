@@ -1946,8 +1946,15 @@ static void DrawVideoOptionsMenu()
 	}
 
 	// resolution info text
-	SDL_Rect displayRect = {};
-	SDL_GetDisplayBounds( 0, &displayRect );
+	SDL_Window* keyboardFocusWindow = SDL_GetKeyboardFocus();
+	SDL_Rect displayRect = { 0, 0, (int)backendInfo.winWidth, (int)backendInfo.winHeight };
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	SDL_DisplayID sdlDisplayId_x = keyboardFocusWindow ? SDL_GetDisplayForWindow( keyboardFocusWindow ) : SDL_GetPrimaryDisplay();
+	SDL_GetDisplayBounds( sdlDisplayId_x, &displayRect );
+#else // SDL2
+	int sdlDisplayId_x = keyboardFocusWindow ? SDL_GetWindowDisplayIndex( keyboardFocusWindow ) : 0;
+	SDL_GetDisplayBounds( sdlDisplayId_x, &displayRect );
+#endif
 	if ( (int)backendInfo.winWidth != backendInfo.vidWidth ) {
 		ImGui::TextDisabled( "Current Resolution: %g x %g (Physical: %d x %d)",
 		                     backendInfo.winWidth, backendInfo.winHeight, backendInfo.vidWidth, backendInfo.vidHeight );
@@ -2057,7 +2064,7 @@ static void DrawVideoOptionsMenu()
 		ImGui::Text( "Renderer: %s", backendInfo.renderer_string );
 		ImGui::Text( "Renderer version: %s", backendInfo.version_string );
 
-		if ( backendInfo.debugOutputAvailable && backendInfo.hasDebugContext ) {
+		if ( backendInfo.debugOutputAvailable && backendInfo.debugContextAvailable ) {
 			ImGui::Text( "    debug context is enabled to show warnings from the graphics driver" );
 		}
 
