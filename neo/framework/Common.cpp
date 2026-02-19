@@ -3260,6 +3260,12 @@ void idCommonLocal::InitGame( void ) {
 		Com_ExecMachineSpec_f( args );
 	}
 
+	// strict engine<->renderer API contract check
+	if ( renderSystem->GetApiVersion() != DHEWM_RENDER_SYSTEM_API_VERSION ) {
+		FatalError( "Renderer API version mismatch: engine expects %d, renderer reports %d",
+		            DHEWM_RENDER_SYSTEM_API_VERSION, renderSystem->GetApiVersion() );
+	}
+
 	// initialize the renderSystem data structures, but don't start renderer backend yet
 	renderSystem->Init();
 

@@ -62,6 +62,8 @@ See https://dhewm3.org/#how-to-install for game data installation instructions.
 See [Configuration.md](./Configuration.md) for dhewm3-specific configuration, especially for 
 using gamepads or the new settings menu.
 
+For engine/renderer interface guarantees, see [docs/RendererAPIContract.md](./docs/RendererAPIContract.md).
+
 ## Compiling
 
 The build system is based on CMake: http://cmake.org/

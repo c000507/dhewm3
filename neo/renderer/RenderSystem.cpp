@@ -42,6 +42,10 @@ If you have questions concerning this license or the applicable additional terms
 idRenderSystemLocal	tr;
 idRenderSystem	*renderSystem = &tr;
 
+int idRenderSystemLocal::GetApiVersion() const {
+	return DHEWM_RENDER_SYSTEM_API_VERSION;
+}
+
 
 /*
 =====================

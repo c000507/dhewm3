@@ -98,6 +98,8 @@ const int SCREEN_HEIGHT			= 480;
 
 class idRenderWorld;
 
+enum { DHEWM_RENDER_SYSTEM_API_VERSION = 1 };
+
 typedef struct renderBackendInfo_s {
 	const char			*renderer_string;
 	const char			*vendor_string;
@@ -125,6 +127,9 @@ class idRenderSystem {
 public:
 
 	virtual					~idRenderSystem() {}
+
+	// strict engine<->renderer API contract version
+	virtual int				GetApiVersion() const = 0;
 
 	// set up cvars and basic data structures, but don't
 	// init the renderer backend, so it can also be used for dedicated servers

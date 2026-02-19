@@ -767,6 +767,7 @@ static const int	MAX_RENDER_CROPS = 8;
 class idRenderSystemLocal : public idRenderSystem {
 public:
 	// external functions
+	virtual int				GetApiVersion() const;
 	virtual void			Init( void );
 	virtual void			Shutdown( void );
 	virtual void			InitBackend( void );
