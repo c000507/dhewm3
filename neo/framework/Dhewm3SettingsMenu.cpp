@@ -1778,7 +1778,7 @@ static bool VideoHasResettableChanges()
 
 static bool VideoHasApplyableChanges()
 {
-	renderBackendState_t curState = {};
+	renderBackendState_t curState;
 	renderSystem->GetBackendState( curState );
 	int wantedWidth = 0, wantedHeight = 0;
 	R_GetModeInfo( &wantedWidth, &wantedHeight, r_mode.GetInteger() );

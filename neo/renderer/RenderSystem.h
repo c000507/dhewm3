@@ -114,10 +114,10 @@ typedef struct renderBackendState_s {
 	int					height;
 	bool				fullScreen;
 	bool				fullScreenDesktop;
-	int					displayHz;
+	int					displayHz;			// nominal mode refresh rate reported by backend mode state
 	int					multiSamples;
 	int					swapInterval;
-	float				displayRefreshHz;
+	float				displayRefreshHz;	// measured/queried current output refresh rate
 } renderBackendState_t;
 
 
