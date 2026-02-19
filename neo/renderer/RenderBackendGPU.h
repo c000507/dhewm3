@@ -51,6 +51,11 @@ class idRenderGpuCommandContext {
 public:
 	virtual					~idRenderGpuCommandContext() {}
 	virtual void			BindPipeline( idRenderGpuPipeline *pipeline ) = 0;
+	virtual void			SetBlendEnabled( bool enabled ) = 0;
+	virtual void			SetScissorEnabled( bool enabled ) = 0;
+	virtual void			SetTexture2DEnabled( bool enabled ) = 0;
+	virtual void			SetBlendEquationAdd() = 0;
+	virtual void			Finish() = 0;
 };
 
 class idRenderGpuDevice {

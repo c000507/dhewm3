@@ -543,22 +543,48 @@ const void	RB_SwapBuffers( const void *data ) {
 
 		bool blendEnabled = qglIsEnabled( GL_BLEND );
 		if ( !blendEnabled )
-			qglEnable( GL_BLEND );
+		{
+			idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetBlendEnabled( true );
+			} else {
+				qglEnable( GL_BLEND );
+			}
+		}
 
 		// TODO: GL_DEPTH_TEST ? (should be disabled, if it needs changing at all)
 
 		bool scissorEnabled = qglIsEnabled( GL_SCISSOR_TEST );
 		if( scissorEnabled )
-			qglDisable( GL_SCISSOR_TEST );
+		{
+			idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetScissorEnabled( false );
+			} else {
+				qglDisable( GL_SCISSOR_TEST );
+			}
+		}
 
 		bool tex2Denabled = qglIsEnabled( GL_TEXTURE_2D );
 		if( tex2Denabled )
-			qglDisable( GL_TEXTURE_2D );
+		{
+			idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetTexture2DEnabled( false );
+			} else {
+				qglDisable( GL_TEXTURE_2D );
+			}
+		}
 
 		qglDisable( GL_VERTEX_PROGRAM_ARB );
 		qglDisable( GL_FRAGMENT_PROGRAM_ARB );
 
-		qglBlendEquation( GL_FUNC_ADD );
+		idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
+		if ( cmdCtx != NULL ) {
+			cmdCtx->SetBlendEquationAdd();
+		} else {
+			qglBlendEquation( GL_FUNC_ADD );
+		}
 
 		qglBlendFunc( GL_ONE, GL_ONE );
 
@@ -592,18 +618,45 @@ const void	RB_SwapBuffers( const void *data ) {
 		qglPopMatrix(); // for modelview
 
 		// restore default or previous states
-		qglBlendEquation( GL_FUNC_ADD );
+		if ( cmdCtx != NULL ) {
+			cmdCtx->SetBlendEquationAdd();
+		} else {
+			qglBlendEquation( GL_FUNC_ADD );
+		}
 		if ( !blendEnabled )
-			qglDisable( GL_BLEND );
+		{
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetBlendEnabled( false );
+			} else {
+				qglDisable( GL_BLEND );
+			}
+		}
 		if( tex2Denabled )
-			qglEnable( GL_TEXTURE_2D );
+		{
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetTexture2DEnabled( true );
+			} else {
+				qglEnable( GL_TEXTURE_2D );
+			}
+		}
 		if( scissorEnabled )
-			qglEnable( GL_SCISSOR_TEST );
+		{
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetScissorEnabled( true );
+			} else {
+				qglEnable( GL_SCISSOR_TEST );
+			}
+		}
 	}
 
 	// force a gl sync if requested
 	if ( r_finish.GetBool() ) {
-		qglFinish();
+		idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
+		if ( cmdCtx != NULL ) {
+			cmdCtx->Finish();
+		} else {
+			qglFinish();
+		}
 	}
 
 	// don't flip if drawing to front buffer

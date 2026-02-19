@@ -30,6 +30,60 @@ If you have questions concerning this license or the applicable additional terms
 #include "renderer/RenderBackendPlatform.h"
 #include <cstring>
 
+class idOpenGLRenderGpuCommandContext : public idRenderGpuCommandContext {
+public:
+	virtual void BindPipeline( idRenderGpuPipeline * ) {
+	}
+
+	virtual void SetBlendEnabled( bool enabled ) {
+		if ( enabled ) {
+			qglEnable( GL_BLEND );
+		} else {
+			qglDisable( GL_BLEND );
+		}
+	}
+
+	virtual void SetScissorEnabled( bool enabled ) {
+		if ( enabled ) {
+			qglEnable( GL_SCISSOR_TEST );
+		} else {
+			qglDisable( GL_SCISSOR_TEST );
+		}
+	}
+
+	virtual void SetTexture2DEnabled( bool enabled ) {
+		if ( enabled ) {
+			qglEnable( GL_TEXTURE_2D );
+		} else {
+			qglDisable( GL_TEXTURE_2D );
+		}
+	}
+
+	virtual void SetBlendEquationAdd() {
+		qglBlendEquation( GL_FUNC_ADD );
+	}
+
+	virtual void Finish() {
+		qglFinish();
+	}
+};
+
+class idNoopRenderGpuCommandContext : public idRenderGpuCommandContext {
+public:
+	virtual void BindPipeline( idRenderGpuPipeline * ) {
+	}
+	virtual void SetBlendEnabled( bool ) {
+	}
+	virtual void SetScissorEnabled( bool ) {
+	}
+	virtual void SetTexture2DEnabled( bool ) {
+	}
+	virtual void SetBlendEquationAdd() {
+	}
+	virtual void Finish() {
+	}
+};
+
 class idOpenGLRenderBackendPlatform : public idRenderBackendPlatform {
 public:
 	virtual renderBackendModule_t GetModule() const {
@@ -103,6 +157,17 @@ public:
 		state.swapInterval = GLimp_GetSwapInterval();
 		state.displayRefreshHz = GLimp_GetDisplayRefresh();
 	}
+
+	virtual GLExtension_t GetExtensionPointer( const char *name ) const {
+		return GLimp_ExtensionPointer( name );
+	}
+
+	virtual idRenderGpuCommandContext* GetImmediateContext() {
+		return &context;
+	}
+
+private:
+	idOpenGLRenderGpuCommandContext context;
 };
 
 class idUnsupportedRenderBackendPlatform : public idRenderBackendPlatform {
@@ -150,8 +215,17 @@ public:
 		memset( &state, 0, sizeof(state) );
 	}
 
+	virtual GLExtension_t GetExtensionPointer( const char * ) const {
+		return NULL;
+	}
+
+	virtual idRenderGpuCommandContext* GetImmediateContext() {
+		return &context;
+	}
+
 private:
 	renderBackendModule_t module;
+	idNoopRenderGpuCommandContext context;
 };
 
 static idOpenGLRenderBackendPlatform s_openGLBackendPlatform;

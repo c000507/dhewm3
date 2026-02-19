@@ -30,6 +30,8 @@ If you have questions concerning this license or the applicable additional terms
 #define __RENDER_BACKEND_PLATFORM_H__
 
 #include "renderer/RenderSystem.h"
+#include "renderer/RenderBackendGPU.h"
+#include "renderer/qgl.h"
 
 typedef struct renderBackendConfig_s {
 	int			width;
@@ -63,6 +65,8 @@ public:
 	virtual bool			SetWindowResizable( bool enableResizable ) = 0;
 	virtual void			ResetGamma() = 0;
 	virtual void			GetState( renderBackendState_t &state ) const = 0;
+	virtual GLExtension_t	GetExtensionPointer( const char *name ) const = 0;
+	virtual idRenderGpuCommandContext* GetImmediateContext() = 0;
 };
 
 // returns globally-owned singleton backend module instance, never NULL
