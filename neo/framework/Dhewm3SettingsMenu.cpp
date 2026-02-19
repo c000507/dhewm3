@@ -1631,12 +1631,14 @@ static CVarOption videoOptionsImmediately[] = {
 	} ),
 	CVarOption( "image_anisotropy", []( idCVar& cvar ) {
 		const char* descr = "Max Texture Anisotropy";
-		if ( glConfig.maxTextureAnisotropy > 1 )
+		renderBackendInfo_t backendInfo = {};
+		renderSystem->GetBackendInfo( backendInfo );
+		if ( backendInfo.maxTextureAnisotropy > 1 )
 		{
 			int texAni = cvar.GetInteger();
 			const char* fmtStr = (texAni > 1) ? "%d" : "No Anisotropic Filtering";
 			ImGui::SliderInt( "Anisotropic Filtering", &texAni, 1,
-			                  glConfig.maxTextureAnisotropy, fmtStr,
+			                  backendInfo.maxTextureAnisotropy, fmtStr,
 			                  ImGuiSliderFlags_AlwaysClamp );
 			if ( texAni != cvar.GetInteger() ) {
 				cvar.SetInteger( texAni );
@@ -1863,6 +1865,9 @@ static void InitVideoOptionsMenu()
 
 static void DrawVideoOptionsMenu()
 {
+	renderBackendInfo_t backendInfo = {};
+	renderSystem->GetBackendInfo( backendInfo );
+
 	ImGui::Spacing();
 	ImGui::Combo( "##qualPresets", &qualityPreset, "Low Quality\0Medium Quality\0High Quality\0Ultra Quality\0" );
 	AddTooltip( "com_machineSpec" );
@@ -1950,17 +1955,17 @@ static void DrawVideoOptionsMenu()
 #endif
 	SDL_Rect displayRect = {};
 	SDL_GetDisplayBounds( sdlDisplayId_x, &displayRect );
-	if ( (int)glConfig.winWidth != glConfig.vidWidth ) {
+	if ( (int)backendInfo.winWidth != backendInfo.vidWidth ) {
 		ImGui::TextDisabled( "Current Resolution: %g x %g (Physical: %d x %d)",
-		                     glConfig.winWidth, glConfig.winHeight, glConfig.vidWidth, glConfig.vidHeight );
+		                     backendInfo.winWidth, backendInfo.winHeight, backendInfo.vidWidth, backendInfo.vidHeight );
 		AddDescrTooltip( "Apparently your system is using a HighDPI mode, where the logical resolution (used to specify"
 		                 " window sizes) is lower than the physical resolution (number of pixels actually rendered)." );
-		float scale = float(glConfig.vidWidth)/glConfig.winWidth;
+		float scale = float(backendInfo.vidWidth)/backendInfo.winWidth;
 		int pw = scale * displayRect.w;
 		int ph = scale * displayRect.h;
 		ImGui::TextDisabled( "Display Size: %d x %d (Physical: %d x %d)", displayRect.w, displayRect.h, pw, ph );
 	} else {
-		ImGui::TextDisabled( "Current Resolution: %d x %d", glConfig.vidWidth, glConfig.vidHeight );
+		ImGui::TextDisabled( "Current Resolution: %d x %d", backendInfo.vidWidth, backendInfo.vidHeight );
 		ImGui::TextDisabled( "Display Size: %d x %d", displayRect.w, displayRect.h );
 	}
 
@@ -2055,11 +2060,11 @@ static void DrawVideoOptionsMenu()
 	if ( ImGui::TreeNode("OpenGL Info") ) {
 		ImGui::BeginDisabled();
 
-		ImGui::Text( "OpenGL vendor: %s", glConfig.vendor_string );
-		ImGui::Text( "OpenGL renderer: %s", glConfig.renderer_string );
-		ImGui::Text( "OpenGL version: %s", glConfig.version_string );
+		ImGui::Text( "OpenGL vendor: %s", backendInfo.vendor_string );
+		ImGui::Text( "OpenGL renderer: %s", backendInfo.renderer_string );
+		ImGui::Text( "OpenGL version: %s", backendInfo.version_string );
 
-		if ( glConfig.glDebugOutputAvailable && glConfig.haveDebugContext ) {
+		if ( backendInfo.glDebugOutputAvailable && backendInfo.haveDebugContext ) {
 			ImGui::Text( "    using an OpenGL debug context to show warnings from the OpenGL driver" );
 		}
 

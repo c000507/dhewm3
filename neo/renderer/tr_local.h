@@ -713,6 +713,7 @@ public:
 	virtual void			DrawStretchTri ( idVec2 p1, idVec2 p2, idVec2 p3, idVec2 t1, idVec2 t2, idVec2 t3, const idMaterial *material );
 	virtual void			GlobalToNormalizedDeviceCoordinates( const idVec3 &global, idVec3 &ndc );
 	virtual void			GetGLSettings( int& width, int& height );
+	virtual void			GetBackendInfo( renderBackendInfo_t &info ) const;
 	virtual void			PrintMemInfo( MemInfo_t *mi );
 
 	virtual void			DrawSmallChar( int x, int y, int ch, const idMaterial *material );

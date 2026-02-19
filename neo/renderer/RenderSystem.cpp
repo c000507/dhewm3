@@ -363,6 +363,19 @@ void idRenderSystemLocal::GetGLSettings( int& width, int& height ) {
 	height = glConfig.vidHeight;
 }
 
+void idRenderSystemLocal::GetBackendInfo( renderBackendInfo_t &info ) const {
+	info.renderer_string = glConfig.renderer_string;
+	info.vendor_string = glConfig.vendor_string;
+	info.version_string = glConfig.version_string;
+	info.maxTextureAnisotropy = glConfig.maxTextureAnisotropy;
+	info.winWidth = glConfig.winWidth;
+	info.winHeight = glConfig.winHeight;
+	info.vidWidth = glConfig.vidWidth;
+	info.vidHeight = glConfig.vidHeight;
+	info.glDebugOutputAvailable = glConfig.glDebugOutputAvailable;
+	info.haveDebugContext = glConfig.haveDebugContext;
+}
+
 /*
 =====================
 idRenderSystemLocal::DrawSmallChar
