@@ -65,7 +65,9 @@ public:
 	virtual void			GetState( renderBackendState_t &state ) const = 0;
 };
 
+// returns globally-owned singleton backend module instance, never NULL
 idRenderBackendPlatform* R_GetRenderBackendPlatform();
+// returns globally-owned singleton backend module instance for the requested module, never NULL
 idRenderBackendPlatform* R_GetRenderBackendPlatform( renderBackendModule_t module );
 
 #endif

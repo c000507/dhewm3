@@ -37,7 +37,9 @@ public:
 	}
 
 	virtual bool Init( const renderBackendConfig_t &config ) {
-		glimpParms_t parms = {};
+		glimpParms_t parms;
+		// keep this explicit zero-init to stay C++03-safe and robust if fields are added later
+		memset( &parms, 0, sizeof(parms) );
 		parms.width = config.width;
 		parms.height = config.height;
 		parms.fullScreen = config.fullScreen;
@@ -49,7 +51,9 @@ public:
 	}
 
 	virtual bool SetScreenParms( const renderBackendConfig_t &config ) {
-		glimpParms_t parms = {};
+		glimpParms_t parms;
+		// keep this explicit zero-init to stay C++03-safe and robust if fields are added later
+		memset( &parms, 0, sizeof(parms) );
 		parms.width = config.width;
 		parms.height = config.height;
 		parms.fullScreen = config.fullScreen;
