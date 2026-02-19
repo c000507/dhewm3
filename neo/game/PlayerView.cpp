@@ -729,7 +729,7 @@ void idPlayerView::RenderPlayerView( idUserInterface *hud ) {
 		if (cvarSystem->GetCVarBool("cst_hudAdjustAspect")) {
 			// similar to CST_ANCHOR_BOTTOM_LEFT
 			int glWidth, glHeight;
-			renderSystem->GetGLSettings(glWidth, glHeight);
+			renderSystem->GetRenderSize(glWidth, glHeight);
 			if (glWidth > 0 && glHeight > 0) {
 				float glAspectRatio = (float)glWidth / (float)glHeight;
 

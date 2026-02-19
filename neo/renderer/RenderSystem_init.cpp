@@ -39,6 +39,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "ui/UserInterface.h"
 
 #include "renderer/tr_local.h"
+#include "renderer/RenderBackendPlatform.h"
 
 #include "framework/GameCallbacks_local.h"
 #include "framework/Game.h"
@@ -395,10 +396,10 @@ static void R_CheckPortableExtensions( void ) {
 	// GL_ARB_multitexture
 	glConfig.multitextureAvailable = R_CheckExtension( "GL_ARB_multitexture" );
 	if ( glConfig.multitextureAvailable ) {
-		qglMultiTexCoord2fARB = (void(APIENTRY *)(GLenum, GLfloat, GLfloat))GLimp_ExtensionPointer( "glMultiTexCoord2fARB" );
-		qglMultiTexCoord2fvARB = (void(APIENTRY *)(GLenum, GLfloat *))GLimp_ExtensionPointer( "glMultiTexCoord2fvARB" );
-		qglActiveTextureARB = (void(APIENTRY *)(GLenum))GLimp_ExtensionPointer( "glActiveTextureARB" );
-		qglClientActiveTextureARB = (void(APIENTRY *)(GLenum))GLimp_ExtensionPointer( "glClientActiveTextureARB" );
+		qglMultiTexCoord2fARB = (void(APIENTRY *)(GLenum, GLfloat, GLfloat))tr.backendPlatform->GetExtensionPointer( "glMultiTexCoord2fARB" );
+		qglMultiTexCoord2fvARB = (void(APIENTRY *)(GLenum, GLfloat *))tr.backendPlatform->GetExtensionPointer( "glMultiTexCoord2fvARB" );
+		qglActiveTextureARB = (void(APIENTRY *)(GLenum))tr.backendPlatform->GetExtensionPointer( "glActiveTextureARB" );
+		qglClientActiveTextureARB = (void(APIENTRY *)(GLenum))tr.backendPlatform->GetExtensionPointer( "glClientActiveTextureARB" );
 		qglGetIntegerv( GL_MAX_TEXTURE_UNITS_ARB, (GLint *)&glConfig.maxTextureUnits );
 		if ( glConfig.maxTextureUnits > MAX_MULTITEXTURE_UNITS ) {
 			glConfig.maxTextureUnits = MAX_MULTITEXTURE_UNITS;
@@ -429,8 +430,8 @@ static void R_CheckPortableExtensions( void ) {
 	// DRI drivers may have GL_ARB_texture_compression but no GL_EXT_texture_compression_s3tc
 	if ( R_CheckExtension( "GL_ARB_texture_compression" ) && R_CheckExtension( "GL_EXT_texture_compression_s3tc" ) ) {
 		glConfig.textureCompressionAvailable = true;
-		qglCompressedTexImage2DARB = (PFNGLCOMPRESSEDTEXIMAGE2DARBPROC)GLimp_ExtensionPointer( "glCompressedTexImage2DARB" );
-		qglGetCompressedTexImageARB = (PFNGLGETCOMPRESSEDTEXIMAGEARBPROC)GLimp_ExtensionPointer( "glGetCompressedTexImageARB" );
+		qglCompressedTexImage2DARB = (PFNGLCOMPRESSEDTEXIMAGE2DARBPROC)tr.backendPlatform->GetExtensionPointer( "glCompressedTexImage2DARB" );
+		qglGetCompressedTexImageARB = (PFNGLGETCOMPRESSEDTEXIMAGEARBPROC)tr.backendPlatform->GetExtensionPointer( "glGetCompressedTexImageARB" );
 		if ( R_CheckExtension( "GL_ARB_texture_compression_bptc" ) ) {
 			glConfig.bptcTextureCompressionAvailable = true;
 		}
@@ -462,7 +463,7 @@ static void R_CheckPortableExtensions( void ) {
 	// GL_EXT_shared_texture_palette
 	glConfig.sharedTexturePaletteAvailable = R_CheckExtension( "GL_EXT_shared_texture_palette" );
 	if ( glConfig.sharedTexturePaletteAvailable ) {
-		qglColorTableEXT = ( void ( APIENTRY * ) ( int, int, int, int, int, const void * ) ) GLimp_ExtensionPointer( "glColorTableEXT" );
+		qglColorTableEXT = ( void ( APIENTRY * ) ( int, int, int, int, int, const void * ) ) tr.backendPlatform->GetExtensionPointer( "glColorTableEXT" );
 	}
 
 	// GL_EXT_texture3D (not currently used for anything)
@@ -470,7 +471,7 @@ static void R_CheckPortableExtensions( void ) {
 	if ( glConfig.texture3DAvailable ) {
 		qglTexImage3D =
 			(void (APIENTRY *)(GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, const GLvoid *) )
-			GLimp_ExtensionPointer( "glTexImage3D" );
+			tr.backendPlatform->GetExtensionPointer( "glTexImage3D" );
 	}
 
 	// EXT_stencil_wrap
@@ -488,16 +489,16 @@ static void R_CheckPortableExtensions( void ) {
 	// GL_EXT_stencil_two_side
 	glConfig.twoSidedStencilAvailable = R_CheckExtension( "GL_EXT_stencil_two_side" );
 	if ( glConfig.twoSidedStencilAvailable )
-		qglActiveStencilFaceEXT = (PFNGLACTIVESTENCILFACEEXTPROC)GLimp_ExtensionPointer( "glActiveStencilFaceEXT" );
+		qglActiveStencilFaceEXT = (PFNGLACTIVESTENCILFACEEXTPROC)tr.backendPlatform->GetExtensionPointer( "glActiveStencilFaceEXT" );
 
 	if( glConfig.glVersion >= 2.0) {
 		common->Printf( "...got GL2.0+ glStencilOpSeparate()\n" );
-		qglStencilOpSeparate = (PFNGLSTENCILOPSEPARATEPROC)GLimp_ExtensionPointer( "glStencilOpSeparate" );
+		qglStencilOpSeparate = (PFNGLSTENCILOPSEPARATEPROC)tr.backendPlatform->GetExtensionPointer( "glStencilOpSeparate" );
 	} else if( R_CheckExtension( "GL_ATI_separate_stencil" ) ) {
 		common->Printf( "...got glStencilOpSeparateATI() (GL_ATI_separate_stencil)\n" );
 		// the ATI version of glStencilOpSeparate() has the same signature and should also
 		// behave identical to the GL2 version (in Mesa3D it's just an alias)
-		qglStencilOpSeparate = (PFNGLSTENCILOPSEPARATEPROC)GLimp_ExtensionPointer( "glStencilOpSeparateATI" );
+		qglStencilOpSeparate = (PFNGLSTENCILOPSEPARATEPROC)tr.backendPlatform->GetExtensionPointer( "glStencilOpSeparateATI" );
 	} else {
 		common->Printf( "X..don't have glStencilOpSeparateATI() or (GL2.0+) glStencilOpSeparate()\n" );
 		qglStencilOpSeparate = NULL;
@@ -506,30 +507,30 @@ static void R_CheckPortableExtensions( void ) {
 	// ARB_vertex_buffer_object
 	glConfig.ARBVertexBufferObjectAvailable = R_CheckExtension( "GL_ARB_vertex_buffer_object" );
 	if(glConfig.ARBVertexBufferObjectAvailable) {
-		qglBindBufferARB = (PFNGLBINDBUFFERARBPROC)GLimp_ExtensionPointer( "glBindBufferARB");
-		qglDeleteBuffersARB = (PFNGLDELETEBUFFERSARBPROC)GLimp_ExtensionPointer( "glDeleteBuffersARB");
-		qglGenBuffersARB = (PFNGLGENBUFFERSARBPROC)GLimp_ExtensionPointer( "glGenBuffersARB");
-		qglIsBufferARB = (PFNGLISBUFFERARBPROC)GLimp_ExtensionPointer( "glIsBufferARB");
-		qglBufferDataARB = (PFNGLBUFFERDATAARBPROC)GLimp_ExtensionPointer( "glBufferDataARB");
-		qglBufferSubDataARB = (PFNGLBUFFERSUBDATAARBPROC)GLimp_ExtensionPointer( "glBufferSubDataARB");
-		qglGetBufferSubDataARB = (PFNGLGETBUFFERSUBDATAARBPROC)GLimp_ExtensionPointer( "glGetBufferSubDataARB");
-		qglMapBufferARB = (PFNGLMAPBUFFERARBPROC)GLimp_ExtensionPointer( "glMapBufferARB");
-		qglUnmapBufferARB = (PFNGLUNMAPBUFFERARBPROC)GLimp_ExtensionPointer( "glUnmapBufferARB");
-		qglGetBufferParameterivARB = (PFNGLGETBUFFERPARAMETERIVARBPROC)GLimp_ExtensionPointer( "glGetBufferParameterivARB");
-		qglGetBufferPointervARB = (PFNGLGETBUFFERPOINTERVARBPROC)GLimp_ExtensionPointer( "glGetBufferPointervARB");
+		qglBindBufferARB = (PFNGLBINDBUFFERARBPROC)tr.backendPlatform->GetExtensionPointer( "glBindBufferARB");
+		qglDeleteBuffersARB = (PFNGLDELETEBUFFERSARBPROC)tr.backendPlatform->GetExtensionPointer( "glDeleteBuffersARB");
+		qglGenBuffersARB = (PFNGLGENBUFFERSARBPROC)tr.backendPlatform->GetExtensionPointer( "glGenBuffersARB");
+		qglIsBufferARB = (PFNGLISBUFFERARBPROC)tr.backendPlatform->GetExtensionPointer( "glIsBufferARB");
+		qglBufferDataARB = (PFNGLBUFFERDATAARBPROC)tr.backendPlatform->GetExtensionPointer( "glBufferDataARB");
+		qglBufferSubDataARB = (PFNGLBUFFERSUBDATAARBPROC)tr.backendPlatform->GetExtensionPointer( "glBufferSubDataARB");
+		qglGetBufferSubDataARB = (PFNGLGETBUFFERSUBDATAARBPROC)tr.backendPlatform->GetExtensionPointer( "glGetBufferSubDataARB");
+		qglMapBufferARB = (PFNGLMAPBUFFERARBPROC)tr.backendPlatform->GetExtensionPointer( "glMapBufferARB");
+		qglUnmapBufferARB = (PFNGLUNMAPBUFFERARBPROC)tr.backendPlatform->GetExtensionPointer( "glUnmapBufferARB");
+		qglGetBufferParameterivARB = (PFNGLGETBUFFERPARAMETERIVARBPROC)tr.backendPlatform->GetExtensionPointer( "glGetBufferParameterivARB");
+		qglGetBufferPointervARB = (PFNGLGETBUFFERPOINTERVARBPROC)tr.backendPlatform->GetExtensionPointer( "glGetBufferPointervARB");
 	}
 
 	// ARB_vertex_program
 	glConfig.ARBVertexProgramAvailable = R_CheckExtension( "GL_ARB_vertex_program" );
 	if (glConfig.ARBVertexProgramAvailable) {
-		qglVertexAttribPointerARB = (PFNGLVERTEXATTRIBPOINTERARBPROC)GLimp_ExtensionPointer( "glVertexAttribPointerARB" );
-		qglEnableVertexAttribArrayARB = (PFNGLENABLEVERTEXATTRIBARRAYARBPROC)GLimp_ExtensionPointer( "glEnableVertexAttribArrayARB" );
-		qglDisableVertexAttribArrayARB = (PFNGLDISABLEVERTEXATTRIBARRAYARBPROC)GLimp_ExtensionPointer( "glDisableVertexAttribArrayARB" );
-		qglProgramStringARB = (PFNGLPROGRAMSTRINGARBPROC)GLimp_ExtensionPointer( "glProgramStringARB" );
-		qglBindProgramARB = (PFNGLBINDPROGRAMARBPROC)GLimp_ExtensionPointer( "glBindProgramARB" );
-		qglGenProgramsARB = (PFNGLGENPROGRAMSARBPROC)GLimp_ExtensionPointer( "glGenProgramsARB" );
-		qglProgramEnvParameter4fvARB = (PFNGLPROGRAMENVPARAMETER4FVARBPROC)GLimp_ExtensionPointer( "glProgramEnvParameter4fvARB" );
-		qglProgramLocalParameter4fvARB = (PFNGLPROGRAMLOCALPARAMETER4FVARBPROC)GLimp_ExtensionPointer( "glProgramLocalParameter4fvARB" );
+		qglVertexAttribPointerARB = (PFNGLVERTEXATTRIBPOINTERARBPROC)tr.backendPlatform->GetExtensionPointer( "glVertexAttribPointerARB" );
+		qglEnableVertexAttribArrayARB = (PFNGLENABLEVERTEXATTRIBARRAYARBPROC)tr.backendPlatform->GetExtensionPointer( "glEnableVertexAttribArrayARB" );
+		qglDisableVertexAttribArrayARB = (PFNGLDISABLEVERTEXATTRIBARRAYARBPROC)tr.backendPlatform->GetExtensionPointer( "glDisableVertexAttribArrayARB" );
+		qglProgramStringARB = (PFNGLPROGRAMSTRINGARBPROC)tr.backendPlatform->GetExtensionPointer( "glProgramStringARB" );
+		qglBindProgramARB = (PFNGLBINDPROGRAMARBPROC)tr.backendPlatform->GetExtensionPointer( "glBindProgramARB" );
+		qglGenProgramsARB = (PFNGLGENPROGRAMSARBPROC)tr.backendPlatform->GetExtensionPointer( "glGenProgramsARB" );
+		qglProgramEnvParameter4fvARB = (PFNGLPROGRAMENVPARAMETER4FVARBPROC)tr.backendPlatform->GetExtensionPointer( "glProgramEnvParameter4fvARB" );
+		qglProgramLocalParameter4fvARB = (PFNGLPROGRAMLOCALPARAMETER4FVARBPROC)tr.backendPlatform->GetExtensionPointer( "glProgramLocalParameter4fvARB" );
 	}
 
 	// ARB_fragment_program
@@ -539,10 +540,10 @@ static void R_CheckPortableExtensions( void ) {
 		glConfig.ARBFragmentProgramAvailable = R_CheckExtension( "GL_ARB_fragment_program" );
 		if (glConfig.ARBFragmentProgramAvailable) {
 			// these are the same as ARB_vertex_program
-			qglProgramStringARB = (PFNGLPROGRAMSTRINGARBPROC)GLimp_ExtensionPointer( "glProgramStringARB" );
-			qglBindProgramARB = (PFNGLBINDPROGRAMARBPROC)GLimp_ExtensionPointer( "glBindProgramARB" );
-			qglProgramEnvParameter4fvARB = (PFNGLPROGRAMENVPARAMETER4FVARBPROC)GLimp_ExtensionPointer( "glProgramEnvParameter4fvARB" );
-			qglProgramLocalParameter4fvARB = (PFNGLPROGRAMLOCALPARAMETER4FVARBPROC)GLimp_ExtensionPointer( "glProgramLocalParameter4fvARB" );
+			qglProgramStringARB = (PFNGLPROGRAMSTRINGARBPROC)tr.backendPlatform->GetExtensionPointer( "glProgramStringARB" );
+			qglBindProgramARB = (PFNGLBINDPROGRAMARBPROC)tr.backendPlatform->GetExtensionPointer( "glBindProgramARB" );
+			qglProgramEnvParameter4fvARB = (PFNGLPROGRAMENVPARAMETER4FVARBPROC)tr.backendPlatform->GetExtensionPointer( "glProgramEnvParameter4fvARB" );
+			qglProgramLocalParameter4fvARB = (PFNGLPROGRAMLOCALPARAMETER4FVARBPROC)tr.backendPlatform->GetExtensionPointer( "glProgramLocalParameter4fvARB" );
 		}
 	}
 
@@ -555,7 +556,7 @@ static void R_CheckPortableExtensions( void ) {
 	// GL_EXT_depth_bounds_test
 	glConfig.depthBoundsTestAvailable = R_CheckExtension( "EXT_depth_bounds_test" );
 	if ( glConfig.depthBoundsTestAvailable ) {
-		qglDepthBoundsEXT = (PFNGLDEPTHBOUNDSEXTPROC)GLimp_ExtensionPointer( "glDepthBoundsEXT" );
+		qglDepthBoundsEXT = (PFNGLDEPTHBOUNDSEXTPROC)tr.backendPlatform->GetExtensionPointer( "glDepthBoundsEXT" );
 	}
 
 	// GL_ARB_debug_output
@@ -563,7 +564,7 @@ static void R_CheckPortableExtensions( void ) {
 	if ( glConfig.haveDebugContext ) {
 		if ( strstr( glConfig.extensions_string, "GL_ARB_debug_output" ) ) {
 			glConfig.glDebugOutputAvailable = true;
-			qglDebugMessageCallbackARB = (PFNGLDEBUGMESSAGECALLBACKARBPROC)GLimp_ExtensionPointer( "glDebugMessageCallbackARB" );
+			qglDebugMessageCallbackARB = (PFNGLDEBUGMESSAGECALLBACKARBPROC)tr.backendPlatform->GetExtensionPointer( "glDebugMessageCallbackARB" );
 			if ( r_glDebugContext.GetBool() ) {
 				common->Printf( "...using GL_ARB_debug_output (r_glDebugContext is set)\n" );
 				qglDebugMessageCallbackARB(DebugCallback, NULL);
@@ -772,7 +773,7 @@ and model information functions.
 */
 void R_InitOpenGL( void ) {
 	GLint			temp;
-	glimpParms_t	parms;
+	renderBackendConfig_t config;
 	int				i;
 
 	common->Printf( "----- Initializing OpenGL -----\n" );
@@ -794,15 +795,15 @@ void R_InitOpenGL( void ) {
 		// set the parameters we are trying
 		R_GetModeInfo( &glConfig.vidWidth, &glConfig.vidHeight, r_mode.GetInteger() );
 
-		parms.width = glConfig.vidWidth;
-		parms.height = glConfig.vidHeight;
-		parms.fullScreen = r_fullscreen.GetBool();
-		parms.fullScreenDesktop = r_fullscreenDesktop.GetBool();
-		parms.displayHz = r_displayRefresh.GetInteger();
-		parms.multiSamples = r_multiSamples.GetInteger();
-		parms.stereo = false;
+		config.width = glConfig.vidWidth;
+		config.height = glConfig.vidHeight;
+		config.fullScreen = r_fullscreen.GetBool();
+		config.fullScreenDesktop = r_fullscreenDesktop.GetBool();
+		config.displayHz = r_displayRefresh.GetInteger();
+		config.multiSamples = r_multiSamples.GetInteger();
+		config.stereo = false;
 
-		if ( GLimp_Init( parms ) ) {
+		if ( tr.backendPlatform != NULL && tr.backendPlatform->Init( config ) ) {
 			// it worked
 			break;
 		}
@@ -821,7 +822,7 @@ void R_InitOpenGL( void ) {
 
 // load qgl function pointers
 #define QGLPROC(name, rettype, args) \
-	q##name = (rettype(APIENTRYP)args)GLimp_ExtensionPointer(#name); \
+	q##name = (rettype(APIENTRYP)args)tr.backendPlatform->GetExtensionPointer(#name); \
 	if (!q##name) \
 		common->FatalError("Unable to initialize OpenGL (%s)", #name);
 
@@ -2112,19 +2113,19 @@ void R_VidRestart_f( const idCmdArgs &args ) {
 		if ( !R_GetModeInfo( &wantedWidth, &wantedHeight, r_mode.GetInteger() ) ) {
 			common->Warning( "vid_restart: R_GetModeInfo() failed?!\n" );
 		} else {
-			glimpParms_t	parms;
-			parms.width = wantedWidth;
-			parms.height = wantedHeight;
+			renderBackendConfig_t config;
+			config.width = wantedWidth;
+			config.height = wantedHeight;
 
-			parms.fullScreen = ( forceWindow ) ? false : r_fullscreen.GetBool();
-			parms.fullScreenDesktop = r_fullscreenDesktop.GetBool();
-			parms.displayHz = r_displayRefresh.GetInteger();
+			config.fullScreen = ( forceWindow ) ? false : r_fullscreen.GetBool();
+			config.fullScreenDesktop = r_fullscreenDesktop.GetBool();
+			config.displayHz = r_displayRefresh.GetInteger();
 			// "vid_restart partial windowed" is used in case of errors to return to windowed mode
 			// before things explode more. in that case just keep whatever MSAA setting is active
-			parms.multiSamples = forceWindow ? -1 : r_multiSamples.GetInteger();
-			parms.stereo = false;
+			config.multiSamples = forceWindow ? -1 : r_multiSamples.GetInteger();
+			config.stereo = false;
 
-			if ( GLimp_SetScreenParms( parms ) ) {
+			if ( tr.backendPlatform != NULL && tr.backendPlatform->SetScreenParms( config ) ) {
 				common->Printf( "'vid_restart partial' succeeded in changing resolution and/or fullscreen mode\n" );
 				return;
 			}
@@ -2160,7 +2161,9 @@ void R_VidRestart_f( const idCmdArgs &args ) {
 	Sys_ShutdownInput();
 	globalImages->PurgeAllImages();
 	// free the context and close the window
-	GLimp_Shutdown();
+	if ( tr.backendPlatform != NULL ) {
+		tr.backendPlatform->Shutdown();
+	}
 	glConfig.isInitialized = false;
 
 	// create the new context and vertex cache
@@ -2310,6 +2313,7 @@ idRenderSystemLocal::Clear
 */
 void idRenderSystemLocal::Clear( void ) {
 	registered = false;
+	backendPlatform = NULL;
 	frameCount = 0;
 	viewCount = 0;
 	staticAllocCount = 0;
@@ -2428,7 +2432,7 @@ void idRenderSystemLocal::Shutdown( void ) {
 
 	Clear();
 
-	ShutdownOpenGL();
+	ShutdownBackend();
 }
 
 /*
@@ -2473,10 +2477,13 @@ void idRenderSystemLocal::EndLevelLoad( void ) {
 
 /*
 ========================
-idRenderSystemLocal::InitOpenGL
+idRenderSystemLocal::InitBackend
 ========================
 */
-void idRenderSystemLocal::InitOpenGL( void ) {
+void idRenderSystemLocal::InitBackend( void ) {
+	if ( backendPlatform == NULL ) {
+		backendPlatform = R_GetRenderBackendPlatform();
+	}
 	// if OpenGL isn't started, start it now
 	if ( !glConfig.isInitialized ) {
 		int	err;
@@ -2494,10 +2501,10 @@ void idRenderSystemLocal::InitOpenGL( void ) {
 
 /*
 ========================
-idRenderSystemLocal::ShutdownOpenGL
+idRenderSystemLocal::ShutdownBackend
 ========================
 */
-void idRenderSystemLocal::ShutdownOpenGL( void ) {
+void idRenderSystemLocal::ShutdownBackend( void ) {
 
 	R_ShutdownFrameData();
 
@@ -2506,17 +2513,19 @@ void idRenderSystemLocal::ShutdownOpenGL( void ) {
 	Sys_ShutdownInput();
 
 	// free the context and close the window
-	GLimp_Shutdown();
+	if ( backendPlatform != NULL ) {
+		backendPlatform->Shutdown();
+	}
 
 	glConfig.isInitialized = false;
 }
 
 /*
 ========================
-idRenderSystemLocal::IsOpenGLRunning
+idRenderSystemLocal::IsBackendRunning
 ========================
 */
-bool idRenderSystemLocal::IsOpenGLRunning( void ) const {
+bool idRenderSystemLocal::IsBackendRunning( void ) const {
 	if ( !glConfig.isInitialized ) {
 		return false;
 	}

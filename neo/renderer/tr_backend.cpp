@@ -29,6 +29,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "sys/sys_imgui.h"
 
 #include "renderer/tr_local.h"
+#include "renderer/RenderBackendPlatform.h"
 
 static idCVar r_fillWindowAlphaChan( "r_fillWindowAlphaChan", "-1", CVAR_SYSTEM | CVAR_NOCHEAT | CVAR_ARCHIVE, "Make sure alpha channel of windows default framebuffer is completely opaque at the end of each frame. Needed at least when using Wayland with older drivers.\n 1: do this, 0: don't do it, -1: let dhewm3 decide (default)" );
 
@@ -533,6 +534,7 @@ const void	RB_SwapBuffers( const void *data ) {
 	}
 
 	D3::ImGuiHooks::EndFrame();
+	idRenderGpuCommandContext* cmdCtx = ( tr.backendPlatform != NULL ) ? tr.backendPlatform->GetImmediateContext() : NULL;
 
 	int fillAlpha = r_fillWindowAlphaChan.GetInteger();
 	if ( fillAlpha == 1 || (fillAlpha == -1 && glConfig.shouldFillWindowAlpha) )
@@ -542,22 +544,44 @@ const void	RB_SwapBuffers( const void *data ) {
 
 		bool blendEnabled = qglIsEnabled( GL_BLEND );
 		if ( !blendEnabled )
-			qglEnable( GL_BLEND );
+		{
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetBlendEnabled( true );
+			} else {
+				qglEnable( GL_BLEND );
+			}
+		}
 
 		// TODO: GL_DEPTH_TEST ? (should be disabled, if it needs changing at all)
 
 		bool scissorEnabled = qglIsEnabled( GL_SCISSOR_TEST );
 		if( scissorEnabled )
-			qglDisable( GL_SCISSOR_TEST );
+		{
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetScissorEnabled( false );
+			} else {
+				qglDisable( GL_SCISSOR_TEST );
+			}
+		}
 
 		bool tex2Denabled = qglIsEnabled( GL_TEXTURE_2D );
 		if( tex2Denabled )
-			qglDisable( GL_TEXTURE_2D );
+		{
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetTexture2DEnabled( false );
+			} else {
+				qglDisable( GL_TEXTURE_2D );
+			}
+		}
 
 		qglDisable( GL_VERTEX_PROGRAM_ARB );
 		qglDisable( GL_FRAGMENT_PROGRAM_ARB );
 
-		qglBlendEquation( GL_FUNC_ADD );
+		if ( cmdCtx != NULL ) {
+			cmdCtx->SetBlendEquationAdd();
+		} else {
+			qglBlendEquation( GL_FUNC_ADD );
+		}
 
 		qglBlendFunc( GL_ONE, GL_ONE );
 
@@ -591,23 +615,51 @@ const void	RB_SwapBuffers( const void *data ) {
 		qglPopMatrix(); // for modelview
 
 		// restore default or previous states
-		qglBlendEquation( GL_FUNC_ADD );
+		if ( cmdCtx != NULL ) {
+			cmdCtx->SetBlendEquationAdd();
+		} else {
+			qglBlendEquation( GL_FUNC_ADD );
+		}
 		if ( !blendEnabled )
-			qglDisable( GL_BLEND );
+		{
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetBlendEnabled( false );
+			} else {
+				qglDisable( GL_BLEND );
+			}
+		}
 		if( tex2Denabled )
-			qglEnable( GL_TEXTURE_2D );
+		{
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetTexture2DEnabled( true );
+			} else {
+				qglEnable( GL_TEXTURE_2D );
+			}
+		}
 		if( scissorEnabled )
-			qglEnable( GL_SCISSOR_TEST );
+		{
+			if ( cmdCtx != NULL ) {
+				cmdCtx->SetScissorEnabled( true );
+			} else {
+				qglEnable( GL_SCISSOR_TEST );
+			}
+		}
 	}
 
 	// force a gl sync if requested
 	if ( r_finish.GetBool() ) {
-		qglFinish();
+		if ( cmdCtx != NULL ) {
+			cmdCtx->Finish();
+		} else {
+			qglFinish();
+		}
 	}
 
 	// don't flip if drawing to front buffer
 	if ( !r_frontBuffer.GetBool() ) {
-		GLimp_SwapBuffers();
+		if ( tr.backendPlatform != NULL ) {
+			tr.backendPlatform->SwapBuffers();
+		}
 	}
 }
 

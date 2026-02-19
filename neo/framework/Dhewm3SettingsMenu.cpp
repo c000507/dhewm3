@@ -1617,12 +1617,12 @@ static CVarOption videoOptionsImmediately[] = {
 			if ( curVsync == 2 ) {
 				curVsync = -1;
 			}
-			if ( GLimp_SetSwapInterval( curVsync ) ) {
+			if ( renderSystem->SetBackendSwapInterval( curVsync ) ) {
 				r_swapInterval.SetInteger( curVsync );
-				// this was just set with GLimp_SetSwapInterval(), no reason to set it again in R_CheckCvars()
+				// this was just set with SetBackendSwapInterval(), no reason to set it again in R_CheckCvars()
 				r_swapInterval.ClearModified();
 			} else {
-				D3::ImGuiHooks::ShowWarningOverlay( "Setting VSync (GL SwapInterval) failed, maybe try another mode" );
+				D3::ImGuiHooks::ShowWarningOverlay( "Setting VSync (backend swap interval) failed, maybe try another mode" );
 			}
 		} else {
 			AddTooltip( "r_swapInterval" );
@@ -1631,12 +1631,14 @@ static CVarOption videoOptionsImmediately[] = {
 	} ),
 	CVarOption( "image_anisotropy", []( idCVar& cvar ) {
 		const char* descr = "Max Texture Anisotropy";
-		if ( glConfig.maxTextureAnisotropy > 1 )
+		renderBackendInfo_t backendInfo = {};
+		renderSystem->GetBackendInfo( backendInfo );
+		if ( backendInfo.maxTextureAnisotropy > 1 )
 		{
 			int texAni = cvar.GetInteger();
 			const char* fmtStr = (texAni > 1) ? "%d" : "No Anisotropic Filtering";
 			ImGui::SliderInt( "Anisotropic Filtering", &texAni, 1,
-			                  glConfig.maxTextureAnisotropy, fmtStr,
+			                  backendInfo.maxTextureAnisotropy, fmtStr,
 			                  ImGuiSliderFlags_AlwaysClamp );
 			if ( texAni != cvar.GetInteger() ) {
 				cvar.SetInteger( texAni );
@@ -1776,7 +1778,8 @@ static bool VideoHasResettableChanges()
 
 static bool VideoHasApplyableChanges()
 {
-	glimpParms_t curState = GLimp_GetCurState();
+	renderBackendState_t curState;
+	renderSystem->GetBackendState( curState );
 	int wantedWidth = 0, wantedHeight = 0;
 	R_GetModeInfo( &wantedWidth, &wantedHeight, r_mode.GetInteger() );
 	if ( wantedWidth != curState.width || wantedHeight != curState.height ) {
@@ -1863,6 +1866,9 @@ static void InitVideoOptionsMenu()
 
 static void DrawVideoOptionsMenu()
 {
+	renderBackendInfo_t backendInfo = {};
+	renderSystem->GetBackendInfo( backendInfo );
+
 	ImGui::Spacing();
 	ImGui::Combo( "##qualPresets", &qualityPreset, "Low Quality\0Medium Quality\0High Quality\0Ultra Quality\0" );
 	AddTooltip( "com_machineSpec" );
@@ -1941,26 +1947,26 @@ static void DrawVideoOptionsMenu()
 	}
 
 	// resolution info text
+	SDL_Window* keyboardFocusWindow = SDL_GetKeyboardFocus();
+	SDL_Rect displayRect = { 0, 0, (int)backendInfo.winWidth, (int)backendInfo.winHeight };
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-	// in SDL3 it's a Display ID, in SDL2 a Display Index, in both cases the value
-	// can be fed into SDL_GetDisplayBounds()
-	SDL_DisplayID sdlDisplayId_x = SDL_GetDisplayForWindow( SDL_GL_GetCurrentWindow() );
-#else // SDL2
-	int sdlDisplayId_x = SDL_GetWindowDisplayIndex( SDL_GL_GetCurrentWindow() );
-#endif
-	SDL_Rect displayRect = {};
+	SDL_DisplayID sdlDisplayId_x = keyboardFocusWindow ? SDL_GetDisplayForWindow( keyboardFocusWindow ) : SDL_GetPrimaryDisplay();
 	SDL_GetDisplayBounds( sdlDisplayId_x, &displayRect );
-	if ( (int)glConfig.winWidth != glConfig.vidWidth ) {
+#else // SDL2
+	int sdlDisplayId_x = keyboardFocusWindow ? SDL_GetWindowDisplayIndex( keyboardFocusWindow ) : 0;
+	SDL_GetDisplayBounds( sdlDisplayId_x, &displayRect );
+#endif
+	if ( (int)backendInfo.winWidth != backendInfo.vidWidth ) {
 		ImGui::TextDisabled( "Current Resolution: %g x %g (Physical: %d x %d)",
-		                     glConfig.winWidth, glConfig.winHeight, glConfig.vidWidth, glConfig.vidHeight );
+		                     backendInfo.winWidth, backendInfo.winHeight, backendInfo.vidWidth, backendInfo.vidHeight );
 		AddDescrTooltip( "Apparently your system is using a HighDPI mode, where the logical resolution (used to specify"
 		                 " window sizes) is lower than the physical resolution (number of pixels actually rendered)." );
-		float scale = float(glConfig.vidWidth)/glConfig.winWidth;
+		float scale = float(backendInfo.vidWidth)/backendInfo.winWidth;
 		int pw = scale * displayRect.w;
 		int ph = scale * displayRect.h;
 		ImGui::TextDisabled( "Display Size: %d x %d (Physical: %d x %d)", displayRect.w, displayRect.h, pw, ph );
 	} else {
-		ImGui::TextDisabled( "Current Resolution: %d x %d", glConfig.vidWidth, glConfig.vidHeight );
+		ImGui::TextDisabled( "Current Resolution: %d x %d", backendInfo.vidWidth, backendInfo.vidHeight );
 		ImGui::TextDisabled( "Display Size: %d x %d", displayRect.w, displayRect.h );
 	}
 
@@ -2052,15 +2058,15 @@ static void DrawVideoOptionsMenu()
 
 	ImGui::Separator();
 
-	if ( ImGui::TreeNode("OpenGL Info") ) {
+	if ( ImGui::TreeNode("Renderer Info") ) {
 		ImGui::BeginDisabled();
 
-		ImGui::Text( "OpenGL vendor: %s", glConfig.vendor_string );
-		ImGui::Text( "OpenGL renderer: %s", glConfig.renderer_string );
-		ImGui::Text( "OpenGL version: %s", glConfig.version_string );
+		ImGui::Text( "Renderer vendor: %s", backendInfo.vendor_string );
+		ImGui::Text( "Renderer: %s", backendInfo.renderer_string );
+		ImGui::Text( "Renderer version: %s", backendInfo.version_string );
 
-		if ( glConfig.glDebugOutputAvailable && glConfig.haveDebugContext ) {
-			ImGui::Text( "    using an OpenGL debug context to show warnings from the OpenGL driver" );
+		if ( backendInfo.debugOutputAvailable && backendInfo.debugContextAvailable ) {
+			ImGui::Text( "    debug context is enabled to show warnings from the graphics driver" );
 		}
 
 		ImGui::EndDisabled();

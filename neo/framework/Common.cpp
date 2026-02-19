@@ -51,7 +51,6 @@ If you have questions concerning this license or the applicable additional terms
 #include "renderer/Model.h"
 #include "renderer/ModelManager.h"
 #include "renderer/RenderSystem.h"
-#include "renderer/tr_local.h" // to get swapinterval and refreshrate
 #include "tools/compilers/compiler_public.h"
 #include "tools/compilers/aas/AASFileManager.h"
 #include "tools/edit_public.h"
@@ -716,7 +715,7 @@ void idCommonLocal::Error( const char *fmt, ... ) {
 	}
 
 	// if we don't have GL running, make it a fatal error
-	if ( !renderSystem->IsOpenGLRunning() ) {
+	if ( !renderSystem->IsBackendRunning() ) {
 		code = ERP_FATAL;
 	}
 
@@ -2454,7 +2453,7 @@ void idCommonLocal::InitRenderSystem( void ) {
 		return;
 	}
 
-	renderSystem->InitOpenGL();
+	renderSystem->InitBackend();
 	PrintLoadingMessage( common->GetLanguageDict()->GetString( "#str_04343" ) );
 }
 
@@ -2560,8 +2559,8 @@ void idCommonLocal::Frame( void ) {
 		if ( com_editors == 0 )
 #endif
 		{
-			if ( com_timescale.GetFloat() == 1.0f && GLimp_GetSwapInterval() != 0
-				&& fabsf(60.0f - GLimp_GetDisplayRefresh()) < 1.0f ) {
+			if ( com_timescale.GetFloat() == 1.0f && renderSystem->GetBackendSwapInterval() != 0
+				&& fabsf(60.0f - renderSystem->GetBackendDisplayRefresh()) < 1.0f ) {
 				// if we're using vsync and the display is running at about 60Hz, start next tic
 				// immediately so our internal tic time and vsync don't drift apart
 				double now = Sys_MillisecondsPrecise();
@@ -3261,7 +3260,13 @@ void idCommonLocal::InitGame( void ) {
 		Com_ExecMachineSpec_f( args );
 	}
 
-	// initialize the renderSystem data structures, but don't start OpenGL yet
+	// strict engine<->renderer API contract check
+	if ( renderSystem->GetApiVersion() != DHEWM_RENDER_SYSTEM_API_VERSION ) {
+		FatalError( "Renderer API version mismatch: engine expects %d, renderer reports %d",
+		            DHEWM_RENDER_SYSTEM_API_VERSION, renderSystem->GetApiVersion() );
+	}
+
+	// initialize the renderSystem data structures, but don't start renderer backend yet
 	renderSystem->Init();
 
 	// initialize string database right off so we can use it for loading messages
@@ -3320,7 +3325,7 @@ void idCommonLocal::InitGame( void ) {
 		idAsyncNetwork::server.InitPort();
 		cvarSystem->SetCVarBool( "s_noSound", true );
 	} else {
-		// init OpenGL, which will open a window and connect sound and input hardware
+		// init renderer backend, which will open a window and connect sound and input hardware
 		PrintLoadingMessage( common->GetLanguageDict()->GetString( "#str_04348" ) );
 		InitRenderSystem();
 	}

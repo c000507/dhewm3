@@ -35,11 +35,16 @@ If you have questions concerning this license or the applicable additional terms
 #include "renderer/GuiModel.h"
 #include "renderer/VertexCache.h"
 #include "renderer/RenderWorld_local.h"
+#include "renderer/RenderBackendPlatform.h"
 
 #include "renderer/tr_local.h"
 
 idRenderSystemLocal	tr;
 idRenderSystem	*renderSystem = &tr;
+
+int idRenderSystemLocal::GetApiVersion() const {
+	return DHEWM_RENDER_SYSTEM_API_VERSION;
+}
 
 
 /*
@@ -254,7 +259,9 @@ static void R_CheckCvars( void ) {
 
 		if ( r_gammaInShader.GetBool() ) {
 			common->Printf( "Will apply r_gamma and r_brightness in shaders\n" );
-			GLimp_ResetGamma(); // reset hardware gamma
+			if ( tr.backendPlatform != NULL ) {
+				tr.backendPlatform->ResetGamma(); // reset hardware gamma
+			}
 		} else {
 			common->Printf( "Will apply r_gamma and r_brightness in hardware (possibly on all screens)\n" );
 			R_SetColorMappings();
@@ -262,12 +269,16 @@ static void R_CheckCvars( void ) {
 	}
 
 	if ( r_swapInterval.IsModified() ) {
-		GLimp_SetSwapInterval( r_swapInterval.GetInteger() );
+		if ( tr.backendPlatform != NULL ) {
+			tr.backendPlatform->SetSwapInterval( r_swapInterval.GetInteger() );
+		}
 		r_swapInterval.ClearModified();
 	}
 
 	if ( r_windowResizable.IsModified() ) {
-		GLimp_SetWindowResizable( r_windowResizable.GetBool() );
+		if ( tr.backendPlatform != NULL ) {
+			tr.backendPlatform->SetWindowResizable( r_windowResizable.GetBool() );
+		}
 		r_windowResizable.ClearModified();
 	}
 }
@@ -358,9 +369,42 @@ void idRenderSystemLocal::GlobalToNormalizedDeviceCoordinates( const idVec3 &glo
 GlobalToNormalizedDeviceCoordinates
 =============
 */
-void idRenderSystemLocal::GetGLSettings( int& width, int& height ) {
+void idRenderSystemLocal::GetRenderSize( int& width, int& height ) {
 	width = glConfig.vidWidth;
 	height = glConfig.vidHeight;
+}
+
+void idRenderSystemLocal::GetBackendInfo( renderBackendInfo_t &info ) const {
+	info.renderer_string = glConfig.renderer_string;
+	info.vendor_string = glConfig.vendor_string;
+	info.version_string = glConfig.version_string;
+	info.maxTextureAnisotropy = glConfig.maxTextureAnisotropy;
+	info.winWidth = glConfig.winWidth;
+	info.winHeight = glConfig.winHeight;
+	info.vidWidth = glConfig.vidWidth;
+	info.vidHeight = glConfig.vidHeight;
+	info.debugOutputAvailable = glConfig.glDebugOutputAvailable;
+	info.debugContextAvailable = glConfig.haveDebugContext;
+}
+
+void idRenderSystemLocal::GetBackendState( renderBackendState_t &state ) const {
+	if ( backendPlatform != NULL ) {
+		backendPlatform->GetState( state );
+		return;
+	}
+	memset( &state, 0, sizeof(state) );
+}
+
+bool idRenderSystemLocal::SetBackendSwapInterval( int swapInterval ) {
+	return backendPlatform != NULL && backendPlatform->SetSwapInterval( swapInterval );
+}
+
+int idRenderSystemLocal::GetBackendSwapInterval() const {
+	return ( backendPlatform != NULL ) ? backendPlatform->GetSwapInterval() : 0;
+}
+
+float idRenderSystemLocal::GetBackendDisplayRefresh() const {
+	return ( backendPlatform != NULL ) ? backendPlatform->GetDisplayRefresh() : 0.0f;
 }
 
 /*

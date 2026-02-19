@@ -1436,7 +1436,7 @@ void idObjective::Event_CamShot( ) {
 					int vidWidth, vidHeight;
 					idVec2 shiftScale;
 
-					renderSystem->GetGLSettings( vidWidth, vidHeight );
+					renderSystem->GetRenderSize( vidWidth, vidHeight );
 
 					float pot;
 					int temp;
