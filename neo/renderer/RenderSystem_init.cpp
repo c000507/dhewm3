@@ -39,6 +39,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "ui/UserInterface.h"
 
 #include "renderer/tr_local.h"
+#include "renderer/RenderBackendPlatform.h"
 
 #include "framework/GameCallbacks_local.h"
 #include "framework/Game.h"
@@ -772,7 +773,7 @@ and model information functions.
 */
 void R_InitOpenGL( void ) {
 	GLint			temp;
-	glimpParms_t	parms;
+	renderBackendConfig_t config;
 	int				i;
 
 	common->Printf( "----- Initializing OpenGL -----\n" );
@@ -794,15 +795,15 @@ void R_InitOpenGL( void ) {
 		// set the parameters we are trying
 		R_GetModeInfo( &glConfig.vidWidth, &glConfig.vidHeight, r_mode.GetInteger() );
 
-		parms.width = glConfig.vidWidth;
-		parms.height = glConfig.vidHeight;
-		parms.fullScreen = r_fullscreen.GetBool();
-		parms.fullScreenDesktop = r_fullscreenDesktop.GetBool();
-		parms.displayHz = r_displayRefresh.GetInteger();
-		parms.multiSamples = r_multiSamples.GetInteger();
-		parms.stereo = false;
+		config.width = glConfig.vidWidth;
+		config.height = glConfig.vidHeight;
+		config.fullScreen = r_fullscreen.GetBool();
+		config.fullScreenDesktop = r_fullscreenDesktop.GetBool();
+		config.displayHz = r_displayRefresh.GetInteger();
+		config.multiSamples = r_multiSamples.GetInteger();
+		config.stereo = false;
 
-		if ( GLimp_Init( parms ) ) {
+		if ( tr.backendPlatform != NULL && tr.backendPlatform->Init( config ) ) {
 			// it worked
 			break;
 		}
@@ -2112,19 +2113,19 @@ void R_VidRestart_f( const idCmdArgs &args ) {
 		if ( !R_GetModeInfo( &wantedWidth, &wantedHeight, r_mode.GetInteger() ) ) {
 			common->Warning( "vid_restart: R_GetModeInfo() failed?!\n" );
 		} else {
-			glimpParms_t	parms;
-			parms.width = wantedWidth;
-			parms.height = wantedHeight;
+			renderBackendConfig_t config;
+			config.width = wantedWidth;
+			config.height = wantedHeight;
 
-			parms.fullScreen = ( forceWindow ) ? false : r_fullscreen.GetBool();
-			parms.fullScreenDesktop = r_fullscreenDesktop.GetBool();
-			parms.displayHz = r_displayRefresh.GetInteger();
+			config.fullScreen = ( forceWindow ) ? false : r_fullscreen.GetBool();
+			config.fullScreenDesktop = r_fullscreenDesktop.GetBool();
+			config.displayHz = r_displayRefresh.GetInteger();
 			// "vid_restart partial windowed" is used in case of errors to return to windowed mode
 			// before things explode more. in that case just keep whatever MSAA setting is active
-			parms.multiSamples = forceWindow ? -1 : r_multiSamples.GetInteger();
-			parms.stereo = false;
+			config.multiSamples = forceWindow ? -1 : r_multiSamples.GetInteger();
+			config.stereo = false;
 
-			if ( GLimp_SetScreenParms( parms ) ) {
+			if ( tr.backendPlatform != NULL && tr.backendPlatform->SetScreenParms( config ) ) {
 				common->Printf( "'vid_restart partial' succeeded in changing resolution and/or fullscreen mode\n" );
 				return;
 			}
@@ -2160,7 +2161,9 @@ void R_VidRestart_f( const idCmdArgs &args ) {
 	Sys_ShutdownInput();
 	globalImages->PurgeAllImages();
 	// free the context and close the window
-	GLimp_Shutdown();
+	if ( tr.backendPlatform != NULL ) {
+		tr.backendPlatform->Shutdown();
+	}
 	glConfig.isInitialized = false;
 
 	// create the new context and vertex cache
@@ -2310,6 +2313,7 @@ idRenderSystemLocal::Clear
 */
 void idRenderSystemLocal::Clear( void ) {
 	registered = false;
+	backendPlatform = NULL;
 	frameCount = 0;
 	viewCount = 0;
 	staticAllocCount = 0;
@@ -2477,6 +2481,9 @@ idRenderSystemLocal::InitBackend
 ========================
 */
 void idRenderSystemLocal::InitBackend( void ) {
+	if ( backendPlatform == NULL ) {
+		backendPlatform = R_GetRenderBackendPlatform();
+	}
 	// if OpenGL isn't started, start it now
 	if ( !glConfig.isInitialized ) {
 		int	err;
@@ -2506,7 +2513,9 @@ void idRenderSystemLocal::ShutdownBackend( void ) {
 	Sys_ShutdownInput();
 
 	// free the context and close the window
-	GLimp_Shutdown();
+	if ( backendPlatform != NULL ) {
+		backendPlatform->Shutdown();
+	}
 
 	glConfig.isInitialized = false;
 }

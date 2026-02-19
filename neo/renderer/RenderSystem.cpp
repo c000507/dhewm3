@@ -35,6 +35,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "renderer/GuiModel.h"
 #include "renderer/VertexCache.h"
 #include "renderer/RenderWorld_local.h"
+#include "renderer/RenderBackendPlatform.h"
 
 #include "renderer/tr_local.h"
 
@@ -254,7 +255,9 @@ static void R_CheckCvars( void ) {
 
 		if ( r_gammaInShader.GetBool() ) {
 			common->Printf( "Will apply r_gamma and r_brightness in shaders\n" );
-			GLimp_ResetGamma(); // reset hardware gamma
+			if ( tr.backendPlatform != NULL ) {
+				tr.backendPlatform->ResetGamma(); // reset hardware gamma
+			}
 		} else {
 			common->Printf( "Will apply r_gamma and r_brightness in hardware (possibly on all screens)\n" );
 			R_SetColorMappings();
@@ -262,12 +265,16 @@ static void R_CheckCvars( void ) {
 	}
 
 	if ( r_swapInterval.IsModified() ) {
-		GLimp_SetSwapInterval( r_swapInterval.GetInteger() );
+		if ( tr.backendPlatform != NULL ) {
+			tr.backendPlatform->SetSwapInterval( r_swapInterval.GetInteger() );
+		}
 		r_swapInterval.ClearModified();
 	}
 
 	if ( r_windowResizable.IsModified() ) {
-		GLimp_SetWindowResizable( r_windowResizable.GetBool() );
+		if ( tr.backendPlatform != NULL ) {
+			tr.backendPlatform->SetWindowResizable( r_windowResizable.GetBool() );
+		}
 		r_windowResizable.ClearModified();
 	}
 }
@@ -377,27 +384,23 @@ void idRenderSystemLocal::GetBackendInfo( renderBackendInfo_t &info ) const {
 }
 
 void idRenderSystemLocal::GetBackendState( renderBackendState_t &state ) const {
-	glimpParms_t curState = GLimp_GetCurState();
-	state.width = curState.width;
-	state.height = curState.height;
-	state.fullScreen = curState.fullScreen;
-	state.fullScreenDesktop = curState.fullScreenDesktop;
-	state.displayHz = curState.displayHz;
-	state.multiSamples = curState.multiSamples;
-	state.swapInterval = GLimp_GetSwapInterval();
-	state.displayRefreshHz = GLimp_GetDisplayRefresh();
+	if ( backendPlatform != NULL ) {
+		backendPlatform->GetState( state );
+		return;
+	}
+	memset( &state, 0, sizeof(state) );
 }
 
 bool idRenderSystemLocal::SetBackendSwapInterval( int swapInterval ) {
-	return GLimp_SetSwapInterval( swapInterval );
+	return backendPlatform != NULL && backendPlatform->SetSwapInterval( swapInterval );
 }
 
 int idRenderSystemLocal::GetBackendSwapInterval() const {
-	return GLimp_GetSwapInterval();
+	return ( backendPlatform != NULL ) ? backendPlatform->GetSwapInterval() : 0;
 }
 
 float idRenderSystemLocal::GetBackendDisplayRefresh() const {
-	return GLimp_GetDisplayRefresh();
+	return ( backendPlatform != NULL ) ? backendPlatform->GetDisplayRefresh() : 0.0f;
 }
 
 /*

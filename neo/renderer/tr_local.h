@@ -40,6 +40,7 @@ class idScreenRect; // yay for include recursion
 #include "renderer/RenderWorld.h"
 
 class idRenderWorldLocal;
+class idRenderBackendPlatform;
 
 // Contains variables specific to the OpenGL configuration being run right now.
 // These are constant once the OpenGL subsystem is initialized.
@@ -822,6 +823,7 @@ public:
 public:
 	// renderer globals
 	bool					registered;		// cleared at shutdown, set at InitBackend
+	idRenderBackendPlatform* backendPlatform;
 
 	bool					takingScreenshot;
 
