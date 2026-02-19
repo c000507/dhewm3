@@ -789,6 +789,10 @@ public:
 	virtual void			GlobalToNormalizedDeviceCoordinates( const idVec3 &global, idVec3 &ndc );
 	virtual void			GetRenderSize( int& width, int& height );
 	virtual void			GetBackendInfo( renderBackendInfo_t &info ) const;
+	virtual void			GetBackendState( renderBackendState_t &state ) const;
+	virtual bool			SetBackendSwapInterval( int swapInterval );
+	virtual int				GetBackendSwapInterval() const;
+	virtual float			GetBackendDisplayRefresh() const;
 	virtual void			PrintMemInfo( MemInfo_t *mi );
 
 	virtual void			DrawSmallChar( int x, int y, int ch, const idMaterial *material );

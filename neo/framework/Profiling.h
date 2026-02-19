@@ -13,7 +13,7 @@
 #define D3P_FRAMEMARK FrameMark;
 
 // at least tracy supports defining additional frame marks (though D3P_FRAMEMARK must always be set!)
-// useful to visualize renderframes (starting/ending at GLimp_SwapBuffers())
+// useful to visualize renderframes (starting/ending at backend buffer swap)
 //  vs engine frames (idCommonLocal::Frame())
 #define D3P_NAMED_FRAMEMARK(NAMESTR) FrameMarkNamed(NAMESTR)
 

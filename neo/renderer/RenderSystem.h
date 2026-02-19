@@ -109,6 +109,17 @@ typedef struct renderBackendInfo_s {
 	bool				debugContextAvailable;
 } renderBackendInfo_t;
 
+typedef struct renderBackendState_s {
+	int					width;
+	int					height;
+	bool				fullScreen;
+	bool				fullScreenDesktop;
+	int					displayHz;
+	int					multiSamples;
+	int					swapInterval;
+	float				displayRefreshHz;
+} renderBackendState_t;
+
 
 class idRenderSystem {
 public:
@@ -162,6 +173,10 @@ public:
 	virtual void			GlobalToNormalizedDeviceCoordinates( const idVec3 &global, idVec3 &ndc ) = 0;
 	virtual void			GetRenderSize( int& width, int& height ) = 0;
 	virtual void			GetBackendInfo( renderBackendInfo_t &info ) const = 0;
+	virtual void			GetBackendState( renderBackendState_t &state ) const = 0;
+	virtual bool			SetBackendSwapInterval( int swapInterval ) = 0;
+	virtual int				GetBackendSwapInterval() const = 0;
+	virtual float			GetBackendDisplayRefresh() const = 0;
 	virtual void			PrintMemInfo( MemInfo_t *mi ) = 0;
 
 	virtual void			DrawSmallChar( int x, int y, int ch, const idMaterial *material ) = 0;

@@ -51,7 +51,6 @@ If you have questions concerning this license or the applicable additional terms
 #include "renderer/Model.h"
 #include "renderer/ModelManager.h"
 #include "renderer/RenderSystem.h"
-#include "renderer/tr_local.h" // to get swapinterval and refreshrate
 #include "tools/compilers/compiler_public.h"
 #include "tools/compilers/aas/AASFileManager.h"
 #include "tools/edit_public.h"
@@ -2560,8 +2559,8 @@ void idCommonLocal::Frame( void ) {
 		if ( com_editors == 0 )
 #endif
 		{
-			if ( com_timescale.GetFloat() == 1.0f && GLimp_GetSwapInterval() != 0
-				&& fabsf(60.0f - GLimp_GetDisplayRefresh()) < 1.0f ) {
+			if ( com_timescale.GetFloat() == 1.0f && renderSystem->GetBackendSwapInterval() != 0
+				&& fabsf(60.0f - renderSystem->GetBackendDisplayRefresh()) < 1.0f ) {
 				// if we're using vsync and the display is running at about 60Hz, start next tic
 				// immediately so our internal tic time and vsync don't drift apart
 				double now = Sys_MillisecondsPrecise();

@@ -376,6 +376,30 @@ void idRenderSystemLocal::GetBackendInfo( renderBackendInfo_t &info ) const {
 	info.debugContextAvailable = glConfig.haveDebugContext;
 }
 
+void idRenderSystemLocal::GetBackendState( renderBackendState_t &state ) const {
+	glimpParms_t curState = GLimp_GetCurState();
+	state.width = curState.width;
+	state.height = curState.height;
+	state.fullScreen = curState.fullScreen;
+	state.fullScreenDesktop = curState.fullScreenDesktop;
+	state.displayHz = curState.displayHz;
+	state.multiSamples = curState.multiSamples;
+	state.swapInterval = GLimp_GetSwapInterval();
+	state.displayRefreshHz = GLimp_GetDisplayRefresh();
+}
+
+bool idRenderSystemLocal::SetBackendSwapInterval( int swapInterval ) {
+	return GLimp_SetSwapInterval( swapInterval );
+}
+
+int idRenderSystemLocal::GetBackendSwapInterval() const {
+	return GLimp_GetSwapInterval();
+}
+
+float idRenderSystemLocal::GetBackendDisplayRefresh() const {
+	return GLimp_GetDisplayRefresh();
+}
+
 /*
 =====================
 idRenderSystemLocal::DrawSmallChar

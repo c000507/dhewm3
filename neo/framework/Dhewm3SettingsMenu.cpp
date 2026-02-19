@@ -1617,12 +1617,12 @@ static CVarOption videoOptionsImmediately[] = {
 			if ( curVsync == 2 ) {
 				curVsync = -1;
 			}
-			if ( GLimp_SetSwapInterval( curVsync ) ) {
+			if ( renderSystem->SetBackendSwapInterval( curVsync ) ) {
 				r_swapInterval.SetInteger( curVsync );
-				// this was just set with GLimp_SetSwapInterval(), no reason to set it again in R_CheckCvars()
+				// this was just set with SetBackendSwapInterval(), no reason to set it again in R_CheckCvars()
 				r_swapInterval.ClearModified();
 			} else {
-				D3::ImGuiHooks::ShowWarningOverlay( "Setting VSync (GL SwapInterval) failed, maybe try another mode" );
+				D3::ImGuiHooks::ShowWarningOverlay( "Setting VSync (backend swap interval) failed, maybe try another mode" );
 			}
 		} else {
 			AddTooltip( "r_swapInterval" );
@@ -1778,7 +1778,8 @@ static bool VideoHasResettableChanges()
 
 static bool VideoHasApplyableChanges()
 {
-	glimpParms_t curState = GLimp_GetCurState();
+	renderBackendState_t curState = {};
+	renderSystem->GetBackendState( curState );
 	int wantedWidth = 0, wantedHeight = 0;
 	R_GetModeInfo( &wantedWidth, &wantedHeight, r_mode.GetInteger() );
 	if ( wantedWidth != curState.width || wantedHeight != curState.height ) {
