@@ -358,7 +358,7 @@ void idRenderSystemLocal::GlobalToNormalizedDeviceCoordinates( const idVec3 &glo
 GlobalToNormalizedDeviceCoordinates
 =============
 */
-void idRenderSystemLocal::GetGLSettings( int& width, int& height ) {
+void idRenderSystemLocal::GetRenderSize( int& width, int& height ) {
 	width = glConfig.vidWidth;
 	height = glConfig.vidHeight;
 }
@@ -372,8 +372,8 @@ void idRenderSystemLocal::GetBackendInfo( renderBackendInfo_t &info ) const {
 	info.winHeight = glConfig.winHeight;
 	info.vidWidth = glConfig.vidWidth;
 	info.vidHeight = glConfig.vidHeight;
-	info.glDebugOutputAvailable = glConfig.glDebugOutputAvailable;
-	info.haveDebugContext = glConfig.haveDebugContext;
+	info.debugOutputAvailable = glConfig.glDebugOutputAvailable;
+	info.hasDebugContext = glConfig.haveDebugContext;
 }
 
 /*

@@ -97,7 +97,7 @@ This is also called when you 'quit' in doom
 void RadiantInit( void ) {
 
 	// make sure the renderer is initialized
-	if ( !renderSystem->IsOpenGLRunning() ) {
+	if ( !renderSystem->IsBackendRunning() ) {
 		common->Printf( "no OpenGL running\n" );
 		return;
 	}

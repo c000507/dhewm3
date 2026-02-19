@@ -36,7 +36,7 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "ui/UserInterfaceLocal.h"
 
-#include "renderer/tr_local.h" // glConfig for winWidth/winHeight
+#include "renderer/RenderSystem.h"
 
 extern idCVar r_skipGuiShaders;		// 1 = don't render any gui elements on surfaces
 extern idCVar r_scaleMenusTo43; // DG: for the "scale menus to 4:3" hack
@@ -384,8 +384,10 @@ const char *idUserInterfaceLocal::HandleEvent( const sysEvent_t *event, int _tim
 			// DG: this is a fullscreen GUI, scale the mousedelta added to cursorX/Y
 			//     by 640/w, because the GUI pretends that everything is 640x480
 			//     even if the actual resolution is higher => mouse moved too fast
-			float w = glConfig.winWidth;
-			float h = glConfig.winHeight;
+			renderBackendInfo_t backendInfo = {};
+			renderSystem->GetBackendInfo( backendInfo );
+			float w = backendInfo.winWidth;
+			float h = backendInfo.winHeight;
 			if( w <= 0.0f || h <= 0.0f ) {
 				w = VIRTUAL_WIDTH;
 				h = VIRTUAL_HEIGHT;
@@ -846,7 +848,7 @@ bool idUserInterfaceLocal::MaybeSetCstWinRegs(bool force) {
 		return false;
 	}
 	int glWidth, glHeight;
-	renderSystem->GetGLSettings(glWidth, glHeight);
+	renderSystem->GetRenderSize(glWidth, glHeight);
 	if (glWidth <= 0 || glHeight <= 0 || (!force && glWidth == lastGlWidth && glHeight == lastGlHeight) ) {
 		return false;
 	}

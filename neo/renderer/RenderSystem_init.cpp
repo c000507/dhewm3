@@ -2428,7 +2428,7 @@ void idRenderSystemLocal::Shutdown( void ) {
 
 	Clear();
 
-	ShutdownOpenGL();
+	ShutdownBackend();
 }
 
 /*
@@ -2473,10 +2473,10 @@ void idRenderSystemLocal::EndLevelLoad( void ) {
 
 /*
 ========================
-idRenderSystemLocal::InitOpenGL
+idRenderSystemLocal::InitBackend
 ========================
 */
-void idRenderSystemLocal::InitOpenGL( void ) {
+void idRenderSystemLocal::InitBackend( void ) {
 	// if OpenGL isn't started, start it now
 	if ( !glConfig.isInitialized ) {
 		int	err;
@@ -2494,10 +2494,10 @@ void idRenderSystemLocal::InitOpenGL( void ) {
 
 /*
 ========================
-idRenderSystemLocal::ShutdownOpenGL
+idRenderSystemLocal::ShutdownBackend
 ========================
 */
-void idRenderSystemLocal::ShutdownOpenGL( void ) {
+void idRenderSystemLocal::ShutdownBackend( void ) {
 
 	R_ShutdownFrameData();
 
@@ -2513,10 +2513,10 @@ void idRenderSystemLocal::ShutdownOpenGL( void ) {
 
 /*
 ========================
-idRenderSystemLocal::IsOpenGLRunning
+idRenderSystemLocal::IsBackendRunning
 ========================
 */
-bool idRenderSystemLocal::IsOpenGLRunning( void ) const {
+bool idRenderSystemLocal::IsBackendRunning( void ) const {
 	if ( !glConfig.isInitialized ) {
 		return false;
 	}

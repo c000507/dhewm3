@@ -1946,15 +1946,8 @@ static void DrawVideoOptionsMenu()
 	}
 
 	// resolution info text
-#if SDL_VERSION_ATLEAST(3, 0, 0)
-	// in SDL3 it's a Display ID, in SDL2 a Display Index, in both cases the value
-	// can be fed into SDL_GetDisplayBounds()
-	SDL_DisplayID sdlDisplayId_x = SDL_GetDisplayForWindow( SDL_GL_GetCurrentWindow() );
-#else // SDL2
-	int sdlDisplayId_x = SDL_GetWindowDisplayIndex( SDL_GL_GetCurrentWindow() );
-#endif
 	SDL_Rect displayRect = {};
-	SDL_GetDisplayBounds( sdlDisplayId_x, &displayRect );
+	SDL_GetDisplayBounds( 0, &displayRect );
 	if ( (int)backendInfo.winWidth != backendInfo.vidWidth ) {
 		ImGui::TextDisabled( "Current Resolution: %g x %g (Physical: %d x %d)",
 		                     backendInfo.winWidth, backendInfo.winHeight, backendInfo.vidWidth, backendInfo.vidHeight );
@@ -2057,15 +2050,15 @@ static void DrawVideoOptionsMenu()
 
 	ImGui::Separator();
 
-	if ( ImGui::TreeNode("OpenGL Info") ) {
+	if ( ImGui::TreeNode("Renderer Info") ) {
 		ImGui::BeginDisabled();
 
-		ImGui::Text( "OpenGL vendor: %s", backendInfo.vendor_string );
-		ImGui::Text( "OpenGL renderer: %s", backendInfo.renderer_string );
-		ImGui::Text( "OpenGL version: %s", backendInfo.version_string );
+		ImGui::Text( "Renderer vendor: %s", backendInfo.vendor_string );
+		ImGui::Text( "Renderer: %s", backendInfo.renderer_string );
+		ImGui::Text( "Renderer version: %s", backendInfo.version_string );
 
-		if ( backendInfo.glDebugOutputAvailable && backendInfo.haveDebugContext ) {
-			ImGui::Text( "    using an OpenGL debug context to show warnings from the OpenGL driver" );
+		if ( backendInfo.debugOutputAvailable && backendInfo.hasDebugContext ) {
+			ImGui::Text( "    debug context is enabled to show warnings from the graphics driver" );
 		}
 
 		ImGui::EndDisabled();

@@ -42,82 +42,6 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 
-// Contains variables specific to the OpenGL configuration being run right now.
-// These are constant once the OpenGL subsystem is initialized.
-typedef struct glconfig_s {
-	const char			*renderer_string;
-	const char			*vendor_string;
-	const char			*version_string;
-	const char			*extensions_string;
-
-	float				glVersion;				// atof( version_string )
-
-
-	int					maxTextureSize;			// queried from GL
-	int					maxTextureUnits;
-	int					maxTextureCoords;
-	int					maxTextureImageUnits;
-	float				maxTextureAnisotropy;
-
-	int					colorBits, alphabits, depthBits, stencilBits;
-
-	bool				multitextureAvailable;
-	bool				textureCompressionAvailable;
-	bool				bptcTextureCompressionAvailable; // DG: for GL_ARB_texture_compression_bptc (BC7)
-	bool				anisotropicAvailable;
-	bool				textureLODBiasAvailable;
-	bool				textureEnvAddAvailable;
-	bool				textureEnvCombineAvailable;
-	bool				registerCombinersAvailable;
-	bool				cubeMapAvailable;
-	bool				envDot3Available;
-	bool				texture3DAvailable;
-	bool				sharedTexturePaletteAvailable;
-	bool				ARBVertexBufferObjectAvailable;
-	bool				ARBVertexProgramAvailable;
-	bool				ARBFragmentProgramAvailable;
-	bool				twoSidedStencilAvailable;
-	bool				textureNonPowerOfTwoAvailable;
-	bool				depthBoundsTestAvailable;
-	bool				glDebugOutputAvailable;
-
-	// GL framebuffer size, see also winWidth and winHeight
-	int					vidWidth, vidHeight;	// passed to R_BeginFrame
-
-	int					displayFrequency;
-
-	bool				isFullscreen;
-
-	bool				allowARB2Path;
-
-	bool				isInitialized;
-
-	// DG: current video backend is known to need opaque default framebuffer
-	//     used if r_fillWindowAlphaChan == -1
-	bool				shouldFillWindowAlpha;
-	bool				isWayland; // DG: for other wayland-specific hacks.. (does *not* detect XWayland!)
-
-	bool				haveDebugContext;
-
-	// For some reason people decided that we need displays with ultra small pixels,
-	// so everything rendered on them must be scaled up to be legible.
-	// unfortunately, this bullshit feature was "improved" upon by deciding that the best
-	// way to implement "High DPI" was to pretend that windows have fewer pixels than they
-	// actually do, so the window size you get and mouse coordinates in them etc
-	// are in e.g. 1024x768, while the physical window size is e.g. 1536x1152 pixels
-	// (when the scaling factor is 1.5), and ideally the GL framebuffer has the physical
-	// window size so things still look crisp.
-	// Of course the reasonable solution would be to go back and time and nuke Cupertino,
-	// where this nonsense scheme was invented, but as I lack the necessary funds,
-	// I reluctantly add winWidth and winHeight and adjust the code that deals with window
-	// coordinates, as far as that's possible..
-	// (Isn't it fun that you have a 2256x1504 display, tell SDL to create a 1920x1080 window
-	//  and you get one that's much bigger and doesn't fit on the screen?)
-
-	float				winWidth, winHeight;	// logical window size (different to vidWidth/height in HighDPI cases)
-} glconfig_t;
-
-
 // font support
 const int GLYPH_START			= 0;
 const int GLYPH_END				= 255;
@@ -181,8 +105,8 @@ typedef struct renderBackendInfo_s {
 	float				maxTextureAnisotropy;
 	float				winWidth, winHeight;
 	int					vidWidth, vidHeight;
-	bool				glDebugOutputAvailable;
-	bool				haveDebugContext;
+	bool				debugOutputAvailable;
+	bool				hasDebugContext;
 } renderBackendInfo_t;
 
 
@@ -192,23 +116,23 @@ public:
 	virtual					~idRenderSystem() {}
 
 	// set up cvars and basic data structures, but don't
-	// init OpenGL, so it can also be used for dedicated servers
+	// init the renderer backend, so it can also be used for dedicated servers
 	virtual void			Init( void ) = 0;
 
 	// only called before quitting
 	virtual void			Shutdown( void ) = 0;
 
-	virtual void			InitOpenGL( void ) = 0;
+	virtual void			InitBackend( void ) = 0;
 
-	virtual void			ShutdownOpenGL( void ) = 0;
+	virtual void			ShutdownBackend( void ) = 0;
 
-	virtual bool			IsOpenGLRunning( void ) const = 0;
+	virtual bool			IsBackendRunning( void ) const = 0;
 
 	virtual bool			IsFullScreen( void ) const = 0;
-	// NOTE: this is the physical width of the GL drawable (framebuffer) in pixels,
+	// NOTE: this is the physical width of the render target (framebuffer) in pixels,
 	//      *not* the logical window size (in case of HighDPI that's not the same!)
 	virtual int				GetScreenWidth( void ) const = 0;
-	// NOTE: this is the physical height of the GL drawable (framebuffer) in pixels,
+	// NOTE: this is the physical height of the render target (framebuffer) in pixels,
 	//      *not* the logical window size (in case of HighDPI that's not the same!)
 	virtual int				GetScreenHeight( void ) const = 0;
 
@@ -236,7 +160,7 @@ public:
 
 	virtual void			DrawStretchTri ( idVec2 p1, idVec2 p2, idVec2 p3, idVec2 t1, idVec2 t2, idVec2 t3, const idMaterial *material ) = 0;
 	virtual void			GlobalToNormalizedDeviceCoordinates( const idVec3 &global, idVec3 &ndc ) = 0;
-	virtual void			GetGLSettings( int& width, int& height ) = 0;
+	virtual void			GetRenderSize( int& width, int& height ) = 0;
 	virtual void			GetBackendInfo( renderBackendInfo_t &info ) const = 0;
 	virtual void			PrintMemInfo( MemInfo_t *mi ) = 0;
 

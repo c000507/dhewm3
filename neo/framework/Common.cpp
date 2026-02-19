@@ -716,7 +716,7 @@ void idCommonLocal::Error( const char *fmt, ... ) {
 	}
 
 	// if we don't have GL running, make it a fatal error
-	if ( !renderSystem->IsOpenGLRunning() ) {
+	if ( !renderSystem->IsBackendRunning() ) {
 		code = ERP_FATAL;
 	}
 
@@ -2454,7 +2454,7 @@ void idCommonLocal::InitRenderSystem( void ) {
 		return;
 	}
 
-	renderSystem->InitOpenGL();
+	renderSystem->InitBackend();
 	PrintLoadingMessage( common->GetLanguageDict()->GetString( "#str_04343" ) );
 }
 
@@ -3261,7 +3261,7 @@ void idCommonLocal::InitGame( void ) {
 		Com_ExecMachineSpec_f( args );
 	}
 
-	// initialize the renderSystem data structures, but don't start OpenGL yet
+	// initialize the renderSystem data structures, but don't start renderer backend yet
 	renderSystem->Init();
 
 	// initialize string database right off so we can use it for loading messages
@@ -3320,7 +3320,7 @@ void idCommonLocal::InitGame( void ) {
 		idAsyncNetwork::server.InitPort();
 		cvarSystem->SetCVarBool( "s_noSound", true );
 	} else {
-		// init OpenGL, which will open a window and connect sound and input hardware
+		// init renderer backend, which will open a window and connect sound and input hardware
 		PrintLoadingMessage( common->GetLanguageDict()->GetString( "#str_04348" ) );
 		InitRenderSystem();
 	}

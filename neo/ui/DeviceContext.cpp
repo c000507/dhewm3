@@ -890,7 +890,7 @@ void idDeviceContext::SetSize(float width, float height) {
 // ===============
 static bool CstGetVidScale(float &_xScale, float &_yScale) {
 	int glWidth, glHeight;
-	renderSystem->GetGLSettings(glWidth, glHeight);
+	renderSystem->GetRenderSize(glWidth, glHeight);
 	if (glWidth <= 0 || glHeight <= 0) {
 		return false;
 	}

@@ -495,7 +495,7 @@ void idPlayerView::SingleView( idUserInterface *hud, const renderView_t *view ) 
 			int vidWidth, vidHeight;
 			idVec2 shiftScale;
 
-			renderSystem->GetGLSettings( vidWidth, vidHeight );
+			renderSystem->GetRenderSize( vidWidth, vidHeight );
 
 			float pot;
 			int	 w = vidWidth;
@@ -703,7 +703,7 @@ void idPlayerView::RenderPlayerView( idUserInterface *hud ) {
 		if (cvarSystem->GetCVarBool("cst_hudAdjustAspect")) {
 			// similar to CST_ANCHOR_BOTTOM_LEFT
 			int glWidth, glHeight;
-			renderSystem->GetGLSettings(glWidth, glHeight);
+			renderSystem->GetRenderSize(glWidth, glHeight);
 			if (glWidth > 0 && glHeight > 0) {
 				float glAspectRatio = (float)glWidth / (float)glHeight;
 
@@ -1814,7 +1814,7 @@ void FullscreenFXManager::Process( const renderView_t *view ) {
 	// compute the shift scale
 	if ( highQualityMode ) {
 		int vidWidth, vidHeight;
-		renderSystem->GetGLSettings( vidWidth, vidHeight );
+		renderSystem->GetRenderSize( vidWidth, vidHeight );
 
 		float pot;
 		int	 w = vidWidth;
