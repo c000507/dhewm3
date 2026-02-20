@@ -760,6 +760,12 @@ void idRenderBackendDrawVulkan::VK_BeginDrawingView() {
 	clearRect.layerCount = 1;
 	vkCmdClearAttachments( currentCmdBuf, 1, clearAtts, 1, &clearRect );
 
+	// Calculate lightScale/overBright for this view — must be done before
+	// VK_DrawInteractions because RB_CreateSingleDrawInteractions multiplies
+	// all light colors by backEnd.lightScale.  If we skip this call lightScale
+	// stays zero and every interaction renders completely black.
+	RB_DetermineLightScale();
+
 	backEnd.currentSpace = NULL;
 	backEnd.currentScissor = viewDef->viewport;
 }
