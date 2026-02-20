@@ -78,7 +78,7 @@
 
 #else // DG: use qgl
 
-#include "renderer/qgl.h"
+#include "renderer/gl/qgl.h"
 
 // creating some #defines for the used gl functions instead of adapting the code below
 // will make updating to new imgui versions easier

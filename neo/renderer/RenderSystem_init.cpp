@@ -264,7 +264,7 @@ idCVar r_glDebugContext( "r_glDebugContext", "0", CVAR_RENDERER | CVAR_BOOL, "En
 
 // define qgl functions
 #define QGLPROC(name, rettype, args) rettype (APIENTRYP q##name) args;
-#include "renderer/qgl_proc.h"
+#include "renderer/gl/qgl_proc.h"
 
 void ( APIENTRY * qglMultiTexCoord2fARB )( GLenum texture, GLfloat s, GLfloat t );
 void ( APIENTRY * qglMultiTexCoord2fvARB )( GLenum texture, GLfloat *st );
@@ -833,7 +833,7 @@ void R_InitOpenGL( void ) {
 	if (!q##name) \
 		common->FatalError("Unable to initialize OpenGL (%s)", #name);
 
-#include "renderer/qgl_proc.h"
+#include "renderer/gl/qgl_proc.h"
 
 	// input and sound systems need to be tied to the new window
 	Sys_InitInput();

@@ -31,7 +31,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "../libs/imgui/imgui.h"
 #include "../libs/imgui/backends/imgui_impl_opengl2.h"
 
-#include "renderer/qgl.h"
+#include "renderer/gl/qgl.h"
 #include "renderer/tr_local.h"
 #include "renderer/RenderImGui.h"
 

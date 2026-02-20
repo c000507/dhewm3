@@ -1890,14 +1890,25 @@ void idRenderBackendDrawVulkan::VK_SetScissor( VkCommandBuffer cmd_buf,
 	const idScreenRect &rect )
 {
 	VkRect2D scissor;
-	scissor.offset.x = rect.x1;
-	scissor.offset.y = rect.y1;
-	scissor.extent.width = rect.x2 - rect.x1 + 1;
-	scissor.extent.height = rect.y2 - rect.y1 + 1;
 
-	// Clamp to valid ranges
-	if ( scissor.offset.x < 0 ) scissor.offset.x = 0;
-	if ( scissor.offset.y < 0 ) scissor.offset.y = 0;
+	// idScreenRect::Clear() sets x1=y1=32000, x2=y2=-32000 to indicate
+	// an empty/uninitialized rect.  Clamp to valid Vulkan scissor ranges.
+	if ( rect.x1 > rect.x2 || rect.y1 > rect.y2 ) {
+		// Empty scissor — use a zero-extent rect to discard everything
+		scissor.offset.x = 0;
+		scissor.offset.y = 0;
+		scissor.extent.width = 0;
+		scissor.extent.height = 0;
+	} else {
+		int x1 = idMath::ClampInt( 0, (int)vkState.swapchainExtent.width, rect.x1 );
+		int y1 = idMath::ClampInt( 0, (int)vkState.swapchainExtent.height, rect.y1 );
+		int x2 = idMath::ClampInt( 0, (int)vkState.swapchainExtent.width, rect.x2 + 1 );
+		int y2 = idMath::ClampInt( 0, (int)vkState.swapchainExtent.height, rect.y2 + 1 );
+		scissor.offset.x = x1;
+		scissor.offset.y = y1;
+		scissor.extent.width = ( x2 > x1 ) ? (uint32_t)( x2 - x1 ) : 0;
+		scissor.extent.height = ( y2 > y1 ) ? (uint32_t)( y2 - y1 ) : 0;
+	}
 
 	vkCmdSetScissor( cmd_buf, 0, 1, &scissor );
 }

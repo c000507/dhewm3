@@ -31,7 +31,7 @@ If you have questions concerning this license or the applicable additional terms
 
 class idScreenRect; // yay for include recursion
 
-#include "renderer/qgl.h"
+#include "renderer/gl/qgl.h"
 #include "renderer/Image.h"
 #include "renderer/Interaction.h"
 #include "renderer/MegaTexture.h"
