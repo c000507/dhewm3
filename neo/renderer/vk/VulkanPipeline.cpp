@@ -120,6 +120,36 @@ static void GetPositionOnlyAttributes( VkVertexInputAttributeDescription *attrs,
 	attrs[0].offset = 0;
 }
 
+// GUI vertex attributes: position (0), texcoord (1), color (5).
+// Used by gui.vert which does not read tangent/bitangent/normal.
+static void GetGuiVertexAttributes( VkVertexInputAttributeDescription *attrs, uint32_t &count ) {
+	count = 3;
+	// location 0: position (vec3)
+	attrs[0].binding = 0;  attrs[0].location = 0;
+	attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;  attrs[0].offset = 0;
+	// location 1: texcoord (vec2)
+	attrs[1].binding = 0;  attrs[1].location = 1;
+	attrs[1].format = VK_FORMAT_R32G32_SFLOAT;  attrs[1].offset = 12;
+	// location 5: color (R8G8B8A8)
+	attrs[2].binding = 0;  attrs[2].location = 5;
+	attrs[2].format = VK_FORMAT_R8G8B8A8_UNORM;  attrs[2].offset = 56;
+}
+
+// Environment vertex attributes: position (0), texcoord (1), normal (4).
+// Used by environment.vert which does not read tangent/bitangent/color.
+static void GetEnvironmentVertexAttributes( VkVertexInputAttributeDescription *attrs, uint32_t &count ) {
+	count = 3;
+	// location 0: position (vec3)
+	attrs[0].binding = 0;  attrs[0].location = 0;
+	attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;  attrs[0].offset = 0;
+	// location 1: texcoord (vec2)
+	attrs[1].binding = 0;  attrs[1].location = 1;
+	attrs[1].format = VK_FORMAT_R32G32_SFLOAT;  attrs[1].offset = 12;
+	// location 4: normal (vec3)
+	attrs[2].binding = 0;  attrs[2].location = 4;
+	attrs[2].format = VK_FORMAT_R32G32B32_SFLOAT;  attrs[2].offset = 20;
+}
+
 // Shadow vertex: vec4 (xyz + w for extrusion flag)
 static VkVertexInputBindingDescription GetShadowVertexBinding() {
 	VkVertexInputBindingDescription binding = {};
@@ -608,6 +638,14 @@ bool idVulkanPipelineManager::CreatePipelines( VkRenderPass renderPass,
 		} else if ( i == VK_PIPELINE_SHADOW ) {
 			binding = GetShadowVertexBinding();
 			GetShadowVertexAttributes( attrs, attrCount );
+		} else if ( i == VK_PIPELINE_GUI ) {
+			// gui.vert only reads position, texcoord, color (not tangent/bitangent/normal)
+			binding = GetFullVertexBinding();
+			GetGuiVertexAttributes( attrs, attrCount );
+		} else if ( i == VK_PIPELINE_ENVIRONMENT ) {
+			// environment.vert only reads position, texcoord, normal (not tangent/bitangent/color)
+			binding = GetFullVertexBinding();
+			GetEnvironmentVertexAttributes( attrs, attrCount );
 		} else {
 			binding = GetFullVertexBinding();
 			GetFullVertexAttributes( attrs, attrCount );
@@ -795,9 +833,10 @@ VkPipeline idVulkanPipelineManager::GetShaderPassPipeline( uint64_t glState, int
 	stages[1].pName = "main";
 
 	VkVertexInputBindingDescription binding = GetFullVertexBinding();
-	VkVertexInputAttributeDescription attrs[6];
+	VkVertexInputAttributeDescription attrs[3];
 	uint32_t attrCount;
-	GetFullVertexAttributes( attrs, attrCount );
+	// gui.vert only reads position (0), texcoord (1), color (5)
+	GetGuiVertexAttributes( attrs, attrCount );
 
 	VkPipelineVertexInputStateCreateInfo vertInput = {};
 	vertInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
