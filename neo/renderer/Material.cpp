@@ -1498,20 +1498,20 @@ void idMaterial::ParseStage( idLexer &src, const textureRepeat_t trpDefault ) {
 		}
 		if ( !token.Icmp( "program" ) ) {
 			if ( src.ReadTokenOnLine( &token ) ) {
-				newStage.vertexProgram = R_FindARBProgram( GL_VERTEX_PROGRAM_ARB, token.c_str() );
-				newStage.fragmentProgram = R_FindARBProgram( GL_FRAGMENT_PROGRAM_ARB, token.c_str() );
+				newStage.vertexProgram = R_FindARBProgram( ARBPROGRAM_VERTEX, token.c_str() );
+				newStage.fragmentProgram = R_FindARBProgram( ARBPROGRAM_FRAGMENT, token.c_str() );
 			}
 			continue;
 		}
 		if ( !token.Icmp( "fragmentProgram" ) ) {
 			if ( src.ReadTokenOnLine( &token ) ) {
-				newStage.fragmentProgram = R_FindARBProgram( GL_FRAGMENT_PROGRAM_ARB, token.c_str() );
+				newStage.fragmentProgram = R_FindARBProgram( ARBPROGRAM_FRAGMENT, token.c_str() );
 			}
 			continue;
 		}
 		if ( !token.Icmp( "vertexProgram" ) ) {
 			if ( src.ReadTokenOnLine( &token ) ) {
-				newStage.vertexProgram = R_FindARBProgram( GL_VERTEX_PROGRAM_ARB, token.c_str() );
+				newStage.vertexProgram = R_FindARBProgram( ARBPROGRAM_VERTEX, token.c_str() );
 			}
 			continue;
 		}
@@ -1523,8 +1523,8 @@ void idMaterial::ParseStage( idLexer &src, const textureRepeat_t trpDefault ) {
 					SetMaterialFlag( MF_DEFAULTED );
 					continue;
 				}
-				newStage.vertexProgram = R_FindARBProgram( GL_VERTEX_PROGRAM_ARB, "megaTexture.vfp" );
-				newStage.fragmentProgram = R_FindARBProgram( GL_FRAGMENT_PROGRAM_ARB, "megaTexture.vfp" );
+				newStage.vertexProgram = R_FindARBProgram( ARBPROGRAM_VERTEX, "megaTexture.vfp" );
+				newStage.fragmentProgram = R_FindARBProgram( ARBPROGRAM_FRAGMENT, "megaTexture.vfp" );
 				continue;
 			}
 		}

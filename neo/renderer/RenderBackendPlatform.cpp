@@ -160,7 +160,7 @@ public:
 		state.displayRefreshHz = GLimp_GetDisplayRefresh();
 	}
 
-	virtual GLExtension_t GetExtensionPointer( const char *name ) const {
+	virtual gpuExtensionPointer_t GetExtensionPointer( const char *name ) const {
 		return GLimp_ExtensionPointer( name );
 	}
 
@@ -217,7 +217,7 @@ public:
 		memset( &state, 0, sizeof(state) );
 	}
 
-	virtual GLExtension_t GetExtensionPointer( const char * ) const {
+	virtual gpuExtensionPointer_t GetExtensionPointer( const char * ) const {
 		return NULL;
 	}
 
@@ -231,14 +231,23 @@ private:
 };
 
 static idOpenGLRenderBackendPlatform s_openGLBackendPlatform;
-static idUnsupportedRenderBackendPlatform s_vulkanBackendPlatform( RBM_VULKAN );
 static idUnsupportedRenderBackendPlatform s_softwareBackendPlatform( RBM_SOFTWARE );
 static idUnsupportedRenderBackendPlatform s_raytraceBackendPlatform( RBM_RAYTRACE );
 static idUnsupportedRenderBackendPlatform s_voxelBackendPlatform( RBM_VOXEL );
 
+#ifdef ID_VULKAN
+extern idRenderBackendPlatform* R_GetVulkanBackendPlatform();
+#else
+static idUnsupportedRenderBackendPlatform s_vulkanBackendPlatformStub( RBM_VULKAN );
+#endif
+
 idRenderBackendPlatform* R_GetRenderBackendPlatform( renderBackendModule_t module ) {
 	switch( module ) {
-		case RBM_VULKAN: return &s_vulkanBackendPlatform;
+#ifdef ID_VULKAN
+		case RBM_VULKAN: return R_GetVulkanBackendPlatform();
+#else
+		case RBM_VULKAN: return &s_vulkanBackendPlatformStub;
+#endif
 		case RBM_SOFTWARE: return &s_softwareBackendPlatform;
 		case RBM_RAYTRACE: return &s_raytraceBackendPlatform;
 		case RBM_VOXEL: return &s_voxelBackendPlatform;

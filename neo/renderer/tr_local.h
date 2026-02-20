@@ -31,6 +31,7 @@ If you have questions concerning this license or the applicable additional terms
 
 class idScreenRect; // yay for include recursion
 
+#include "renderer/qgl.h"
 #include "renderer/Image.h"
 #include "renderer/Interaction.h"
 #include "renderer/MegaTexture.h"
@@ -42,6 +43,7 @@ class idScreenRect; // yay for include recursion
 
 class idRenderWorldLocal;
 class idRenderBackendPlatform;
+class idRenderBackendDraw;
 
 // Contains variables specific to the OpenGL configuration being run right now.
 // These are constant once the OpenGL subsystem is initialized.
@@ -92,6 +94,7 @@ typedef struct glconfig_s {
 	bool				allowARB2Path;
 
 	bool				isInitialized;
+	bool				isVulkan;		// true if the Vulkan backend is active
 
 	// DG: current video backend is known to need opaque default framebuffer
 	//     used if r_fillWindowAlphaChan == -1
@@ -559,13 +562,17 @@ typedef enum {
 						// of forced list submission before syncs
 } renderCommand_t;
 
-typedef struct {
+typedef struct emptyCommand_s {
 	renderCommand_t		commandId, *next;
 } emptyCommand_t;
 
+// API-neutral draw buffer identifiers
+const int DRAWBUFFER_BACK	= 0;
+const int DRAWBUFFER_FRONT	= 1;
+
 typedef struct {
 	renderCommand_t		commandId, *next;
-	GLenum	buffer;
+	int		buffer;		// DRAWBUFFER_BACK or DRAWBUFFER_FRONT
 	int		frameCount;
 } setBufferCommand_t;
 
@@ -834,6 +841,7 @@ public:
 	// renderer globals
 	bool					registered;		// cleared at shutdown, set at InitBackend
 	idRenderBackendPlatform* backendPlatform;
+	idRenderBackendDraw*	backendDraw;
 	idRenderImGuiBackend*	imguiBackend;
 
 	bool					takingScreenshot;
@@ -1147,6 +1155,10 @@ const int GLS_DEFAULT							= GLS_DEPTHFUNC_ALWAYS;
 
 void R_Init( void );
 void R_InitOpenGL( void );
+#ifdef ID_VULKAN
+void R_InitVulkan( void );
+extern idCVar r_renderBackend;
+#endif
 
 void R_DoneFreeType( void );
 
@@ -1398,7 +1410,12 @@ DRAW_*
 void	R_ARB2_Init( void );
 void	RB_ARB2_DrawInteractions( void );
 void	R_ReloadARBPrograms_f( const idCmdArgs &args );
-int		R_FindARBProgram( GLenum target, const char *program );
+
+// API-neutral ARB program target types
+const int ARBPROGRAM_VERTEX		= 0;
+const int ARBPROGRAM_FRAGMENT	= 1;
+
+int		R_FindARBProgram( int target, const char *program );
 
 typedef enum {
 	PROG_INVALID,

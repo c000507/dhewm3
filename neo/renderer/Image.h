@@ -32,7 +32,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "idlib/containers/List.h"
 #include "framework/FileSystem.h"
 #include "renderer/Material.h"
-#include "renderer/qgl.h"
+// Note: GL-specific code (Image_load.cpp etc.) includes qgl.h via tr_local.h
 
 /*
 ====================================================================
@@ -232,14 +232,14 @@ public:
 	void		StartBackgroundImageLoad();
 	int			BitsForInternalFormat( int internalFormat ) const;
 	void		UploadCompressedNormalMap( int width, int height, const byte *rgba, int mipLevel );
-	GLenum		SelectInternalFormat( const byte **dataPtrs, int numDataPtrs, int width, int height,
+	int			SelectInternalFormat( const byte **dataPtrs, int numDataPtrs, int width, int height,
 									 textureDepth_t minimumDepth ) const;
 	void		ImageProgramStringToCompressedFileName( const char *imageProg, char *fileName ) const;
 	int			NumLevelsForImageSize( int width, int height ) const;
 
 	// data commonly accessed is grouped here
 	static const int TEXTURE_NOT_LOADED = -1;
-	GLuint				texnum;					// gl texture binding, will be TEXTURE_NOT_LOADED if not loaded
+	unsigned int		texnum;					// GPU texture handle, will be TEXTURE_NOT_LOADED if not loaded
 	textureType_t		type;
 	int					frameUsed;				// for texture usage in frame statistics
 	int					bindCount;				// incremented each bind
@@ -279,6 +279,10 @@ public:
 	idImage *			hashNext;				// for hash chains to speed lookup
 
 	int					refCount;				// overall ref count
+
+#ifdef ID_VULKAN
+	unsigned int		vkHandle;				// Vulkan texture handle via vkTextureMgr (0 = not loaded)
+#endif
 };
 
 ID_INLINE idImage::idImage() {
@@ -310,6 +314,9 @@ ID_INLINE idImage::idImage() {
 	cacheUsagePrev = cacheUsageNext = NULL;
 	hashNext = NULL;
 	refCount = 0;
+#ifdef ID_VULKAN
+	vkHandle = 0;
+#endif
 }
 
 
@@ -454,8 +461,8 @@ public:
 	byte				compressedPalette[768];		// the palette that normal maps use
 
 	// default filter modes for images
-	GLenum				textureMinFilter;
-	GLenum				textureMaxFilter;
+	int					textureMinFilter;
+	int					textureMaxFilter;
 	float				textureAnisotropy;
 	float				textureLODBias;
 
@@ -470,6 +477,11 @@ public:
 };
 
 extern idImageManager	*globalImages;		// pointer to global list for the rest of the system
+
+#ifdef ID_VULKAN
+// Re-create Vulkan textures for all images. Call after vkTextureMgr.Init().
+void VK_LoadAllImages();
+#endif
 
 int MakePowerOfTwo( int num );
 

@@ -20,12 +20,14 @@
 #if SDL_VERSION_ATLEAST(3, 0, 0)
   #include "../libs/imgui/backends/imgui_impl_sdl3.h"
   #define ImGui_ImplSDLx_InitForOpenGL ImGui_ImplSDL3_InitForOpenGL
+  #define ImGui_ImplSDLx_InitForVulkan ImGui_ImplSDL3_InitForVulkan
   #define ImGui_ImplSDLx_Shutdown ImGui_ImplSDL3_Shutdown
   #define ImGui_ImplSDLx_NewFrame ImGui_ImplSDL3_NewFrame
   #define ImGui_ImplSDLx_ProcessEvent ImGui_ImplSDL3_ProcessEvent
 #else
   #include "../libs/imgui/backends/imgui_impl_sdl2.h"
   #define ImGui_ImplSDLx_InitForOpenGL ImGui_ImplSDL2_InitForOpenGL
+  #define ImGui_ImplSDLx_InitForVulkan ImGui_ImplSDL2_InitForVulkan
   #define ImGui_ImplSDLx_Shutdown ImGui_ImplSDL2_Shutdown
   #define ImGui_ImplSDLx_NewFrame ImGui_ImplSDL2_NewFrame
   #define ImGui_ImplSDLx_ProcessEvent ImGui_ImplSDL2_ProcessEvent
@@ -255,7 +257,13 @@ bool Init(void* _sdlWindow, void* sdlGlContext)
 #endif
 
 	// Setup Platform/Renderer backends
-	if ( ! ImGui_ImplSDLx_InitForOpenGL( sdlWindow, sdlGlContext ) ) {
+	bool sdlPlatformOK;
+	if ( sdlGlContext != NULL ) {
+		sdlPlatformOK = ImGui_ImplSDLx_InitForOpenGL( sdlWindow, sdlGlContext );
+	} else {
+		sdlPlatformOK = ImGui_ImplSDLx_InitForVulkan( sdlWindow );
+	}
+	if ( ! sdlPlatformOK ) {
 		ImGui::DestroyContext( imguiCtx );
 		imguiCtx = NULL;
 		common->Warning( "Failed to initialize ImGui SDL platform backend!\n" );
@@ -321,6 +329,10 @@ void Shutdown()
 // => ProcessEvent() has already been called (probably multiple times)
 void NewFrame()
 {
+	if ( !imgui_initialized ) {
+		return;
+	}
+
 	D3P_ScopedCPUSample(Imgui_NewFrame);
 	// it can happen that NewFrame() is called without EndFrame() having been called
 	// after the last NewFrame() call, for example when D3Radiant is active and in

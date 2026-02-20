@@ -40,7 +40,9 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "renderer/tr_local.h"
 #include "renderer/RenderBackendPlatform.h"
+#include "renderer/RenderBackendDraw.h"
 #include "renderer/RenderImGui.h"
+#include "sys/sys_imgui.h"
 
 #include "framework/GameCallbacks_local.h"
 #include "framework/Game.h"
@@ -57,6 +59,10 @@ If you have questions concerning this license or the applicable additional terms
 glconfig_t	glConfig;
 
 const char *r_rendererArgs[] = { "best", "arb2", NULL };
+
+#ifdef ID_VULKAN
+idCVar r_renderBackend( "r_renderBackend", "gl", CVAR_RENDERER | CVAR_ARCHIVE, "rendering backend: gl or vulkan" );
+#endif
 
 idCVar r_inhibitFragmentProgram( "r_inhibitFragmentProgram", "0", CVAR_RENDERER | CVAR_BOOL, "ignore the fragment program extension" );
 idCVar r_useLightPortalFlow( "r_useLightPortalFlow", "1", CVAR_RENDERER | CVAR_BOOL, "use a more precise area reference determination" );
@@ -908,10 +914,88 @@ void R_InitOpenGL( void ) {
 
 /*
 ==================
+R_InitVulkan
+
+Initialize the Vulkan rendering backend — creates the window, Vulkan instance,
+device, and swapchain through the platform layer, then sets up the vertex cache
+and frame data.
+==================
+*/
+#ifdef ID_VULKAN
+void R_InitVulkan( void ) {
+	renderBackendConfig_t config;
+
+	common->Printf( "----- Initializing Vulkan -----\n" );
+
+	if ( glConfig.isInitialized ) {
+		common->FatalError( "R_InitVulkan called while active" );
+	}
+
+	tr.viewportOffset[0] = 0;
+	tr.viewportOffset[1] = 0;
+
+	initSortedVidModes();
+
+	for ( int i = 0; i < 2; i++ ) {
+		R_GetModeInfo( &glConfig.vidWidth, &glConfig.vidHeight, r_mode.GetInteger() );
+
+		config.width = glConfig.vidWidth;
+		config.height = glConfig.vidHeight;
+		config.fullScreen = r_fullscreen.GetBool();
+		config.fullScreenDesktop = r_fullscreenDesktop.GetBool();
+		config.displayHz = r_displayRefresh.GetInteger();
+		config.multiSamples = r_multiSamples.GetInteger();
+		config.stereo = false;
+
+		if ( tr.backendPlatform != NULL && tr.backendPlatform->Init( config ) ) {
+			break;
+		}
+
+		if ( i == 1 ) {
+			common->FatalError( "Unable to initialize Vulkan" );
+		}
+
+		r_mode.SetInteger( 3 );
+		r_fullscreen.SetInteger( 0 );
+		r_displayRefresh.SetInteger( 0 );
+		r_multiSamples.SetInteger( 0 );
+	}
+
+	// Input and sound systems need to be tied to the new window
+	Sys_InitInput();
+	soundSystem->InitHW();
+
+	// Vulkan has equivalent or better capability than ARB2
+	glConfig.allowARB2Path = true;
+
+	// Vertex cache (will need Vulkan buffer paths later)
+	vertexCache.Init();
+
+	// select which renderSystem we are going to use
+	r_renderer.SetModified();
+	tr.SetBackEndRenderer();
+
+	R_InitFrameData();
+
+	r_gammaInShader.ClearModified();
+	if ( r_gammaInShader.GetBool() ) {
+		common->Printf( "Will apply r_gamma and r_brightness in shaders (r_gammaInShader 1)\n" );
+	}
+
+	common->Printf( "----- Vulkan Initialization Complete -----\n" );
+}
+#endif
+
+/*
+==================
 GL_CheckErrors
 ==================
 */
 void GL_CheckErrors( void ) {
+	if ( glConfig.isVulkan ) {
+		return;
+	}
+
 	int		err;
 	char	s[64];
 	int		i;
@@ -1361,21 +1445,8 @@ void R_ReadTiledPixels( int width, int height, byte *buffer, renderView_t *ref =
 				h = height - yo;
 			}
 
-			if ( glConfig.isWayland ) {
-				// DG: Native Wayland (=> not XWayland) doesn't seem to support reading
-				//     from the front buffer - screenshot is black then..
-				//     So just read from the default (probably back-) buffer
-				qglReadPixels( 0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, temp );
-			} else {
-				// DG: It's probably better to restore the glReadBuffer mode after reading the pixels..
-				//     (at least with XWayland on GNOME changing resolutions is wonky when not doing this)
-				GLint oldReadBuf = GL_BACK;
-				qglGetIntegerv( GL_READ_BUFFER, &oldReadBuf );
-				qglReadBuffer( GL_FRONT );
-
-				qglReadPixels( 0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, temp );
-
-				qglReadBuffer( oldReadBuf );
+			if ( tr.backendDraw != NULL ) {
+				tr.backendDraw->ReadPixels( 0, 0, w, h, temp );
 			}
 
 			int	row = ( w * 3 + 3 ) & ~3;		// OpenGL pads to dword boundaries
@@ -2161,6 +2232,14 @@ void R_VidRestart_f( const idCmdArgs &args ) {
 	soundSystem->ShutdownHW();
 	Sys_ShutdownInput();
 	globalImages->PurgeAllImages();
+
+	// Shut down the draw backend before destroying the rendering context.
+	// For Vulkan, this frees command buffers, allocators, and other GPU resources
+	// that are tied to the device and would become invalid after platform shutdown.
+	if ( tr.backendDraw != NULL ) {
+		tr.backendDraw->Shutdown();
+	}
+
 	// free the context and close the window
 	if ( tr.backendPlatform != NULL ) {
 		tr.backendPlatform->Shutdown();
@@ -2172,8 +2251,28 @@ void R_VidRestart_f( const idCmdArgs &args ) {
 	if ( forceWindow ) {
 		cvarSystem->SetCVarBool( "r_fullscreen", false );
 	}
-	R_InitOpenGL();
+#ifdef ID_VULKAN
+	if ( idStr::Icmp( r_renderBackend.GetString(), "vulkan" ) == 0 ) {
+		R_InitVulkan();
+	} else
+#endif
+	{
+		R_InitOpenGL();
+	}
 	cvarSystem->SetCVarBool( "r_fullscreen", latch );
+
+	// Reinitialize the draw backend with the new rendering context
+	if ( tr.backendDraw != NULL ) {
+		tr.backendDraw->Init();
+	}
+
+	// For Vulkan, re-initialize ImGui (GL path handles this inside GLimp_Init)
+#ifdef ID_VULKAN
+	if ( glConfig.isVulkan ) {
+		extern void * VkImp_GetWindowVoid();
+		D3::ImGuiHooks::Init( VkImp_GetWindowVoid(), NULL );
+	}
+#endif
 
 	// regenerate all images
 	globalImages->ReloadAllImages();
@@ -2186,9 +2285,14 @@ void R_VidRestart_f( const idCmdArgs &args ) {
 	R_RegenerateWorld_f( idCmdArgs() );
 
 	// check for problems
-	err = qglGetError();
-	if ( err != GL_NO_ERROR ) {
-		common->Printf( "glGetError() = 0x%x\n", err );
+#ifdef ID_VULKAN
+	if ( !glConfig.isVulkan )
+#endif
+	{
+		err = qglGetError();
+		if ( err != GL_NO_ERROR ) {
+			common->Printf( "glGetError() = 0x%x\n", err );
+		}
 	}
 
 	// start sound playing again
@@ -2315,6 +2419,7 @@ idRenderSystemLocal::Clear
 void idRenderSystemLocal::Clear( void ) {
 	registered = false;
 	backendPlatform = NULL;
+	backendDraw = NULL;
 	imguiBackend = NULL;
 	frameCount = 0;
 	viewCount = 0;
@@ -2409,6 +2514,16 @@ void idRenderSystemLocal::Shutdown( void ) {
 
 	R_DoneFreeType( );
 
+	// Shut down the draw backend first: for Vulkan this waits for the GPU
+	// to finish, destroys descriptor pools (freeing all descriptor sets),
+	// and frees textures/samplers. This MUST happen before PurgeAllImages()
+	// which also calls vkDestroySampler — if descriptor sets still reference
+	// the samplers at that point, Vulkan validation will error.
+	if ( backendDraw != NULL ) {
+		backendDraw->Shutdown();
+		backendDraw = NULL;
+	}
+
 	if ( glConfig.isInitialized ) {
 		globalImages->PurgeAllImages();
 	}
@@ -2426,8 +2541,6 @@ void idRenderSystemLocal::Shutdown( void ) {
 	vertexCache.Shutdown();
 
 	R_ShutdownTriSurfData();
-
-	RB_ShutdownDebugTools();
 
 	delete guiModel;
 	delete demoGuiModel;
@@ -2483,23 +2596,52 @@ idRenderSystemLocal::InitBackend
 ========================
 */
 void idRenderSystemLocal::InitBackend( void ) {
+#ifdef ID_VULKAN
+	bool useVulkan = ( idStr::Icmp( r_renderBackend.GetString(), "vulkan" ) == 0 );
+#else
+	bool useVulkan = false;
+#endif
+
 	if ( backendPlatform == NULL ) {
-		backendPlatform = R_GetRenderBackendPlatform();
+		if ( useVulkan ) {
+			backendPlatform = R_GetRenderBackendPlatform( RBM_VULKAN );
+		} else {
+			backendPlatform = R_GetRenderBackendPlatform();
+		}
+	}
+	if ( backendDraw == NULL ) {
+		backendDraw = R_CreateBackendDraw();
 	}
 	if ( imguiBackend == NULL ) {
 		imguiBackend = CreateRenderImGuiBackend();
 	}
-	// if OpenGL isn't started, start it now
+
 	if ( !glConfig.isInitialized ) {
-		int	err;
+		if ( useVulkan ) {
+			R_InitVulkan();
+		} else {
+			R_InitOpenGL();
+		}
 
-		R_InitOpenGL();
+		// Initialize the draw backend now that the rendering context exists
+		if ( backendDraw != NULL ) {
+			backendDraw->Init();
+		}
 
-		globalImages->ReloadAllImages();
+		// For Vulkan, initialize ImGui here (GL path does it inside GLimp_Init).
+		// Must happen after backendDraw->Init() so vkState.mainRenderPass is set.
+		if ( useVulkan ) {
+			extern void * VkImp_GetWindowVoid();
+			D3::ImGuiHooks::Init( VkImp_GetWindowVoid(), NULL );
+		}
 
-		err = qglGetError();
-		if ( err != GL_NO_ERROR ) {
-			common->Printf( "glGetError() = 0x%x\n", err );
+		if ( !useVulkan ) {
+			globalImages->ReloadAllImages();
+
+			int err = qglGetError();
+			if ( err != GL_NO_ERROR ) {
+				common->Printf( "glGetError() = 0x%x\n", err );
+			}
 		}
 	}
 }
@@ -2510,6 +2652,11 @@ idRenderSystemLocal::ShutdownBackend
 ========================
 */
 void idRenderSystemLocal::ShutdownBackend( void ) {
+	if ( backendDraw != NULL ) {
+		backendDraw->Shutdown();
+		backendDraw = NULL;
+	}
+
 	delete imguiBackend;
 	imguiBackend = NULL;
 

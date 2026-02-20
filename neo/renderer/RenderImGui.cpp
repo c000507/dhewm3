@@ -35,6 +35,10 @@ If you have questions concerning this license or the applicable additional terms
 #include "renderer/tr_local.h"
 #include "renderer/RenderImGui.h"
 
+// ============================================================================
+// OpenGL2 ImGui backend
+// ============================================================================
+
 class idRenderImGuiBackendGL2 : public idRenderImGuiBackend {
 public:
 	bool Init() override {
@@ -86,7 +90,111 @@ public:
 	}
 };
 
+// ============================================================================
+// Vulkan ImGui backend
+// ============================================================================
+
+#ifdef ID_VULKAN
+
+#include "../libs/imgui/backends/imgui_impl_vulkan.h"
+#include "renderer/vk/VulkanState.h"
+
+static void VkImGui_CheckResult( VkResult err ) {
+	if ( err != VK_SUCCESS ) {
+		common->Warning( "ImGui Vulkan: VkResult = %d", (int)err );
+	}
+}
+
+class idRenderImGuiBackendVulkan : public idRenderImGuiBackend {
+public:
+	idRenderImGuiBackendVulkan() : vkInitialized( false ) {}
+	~idRenderImGuiBackendVulkan() override { Shutdown(); }
+
+	bool Init() override {
+		if ( vkState.device == VK_NULL_HANDLE || vkState.mainRenderPass == VK_NULL_HANDLE ) {
+			common->Warning( "ImGui Vulkan: device or render pass not ready" );
+			return false;
+		}
+
+		ImGui_ImplVulkan_InitInfo initInfo = {};
+		initInfo.ApiVersion = VK_API_VERSION_1_0;
+		initInfo.Instance = vkState.instance;
+		initInfo.PhysicalDevice = vkState.physicalDevice;
+		initInfo.Device = vkState.device;
+		initInfo.QueueFamily = vkState.graphicsQueueFamily;
+		initInfo.Queue = vkState.graphicsQueue;
+		initInfo.DescriptorPoolSize = 16;  // let ImGui create its own pool
+		initInfo.MinImageCount = 2;
+		initInfo.ImageCount = (uint32_t)vkState.swapchainImages.size();
+		if ( initInfo.ImageCount < 2 ) {
+			initInfo.ImageCount = 2;
+		}
+		initInfo.PipelineInfoMain.RenderPass = vkState.mainRenderPass;
+		initInfo.PipelineInfoMain.Subpass = 0;
+		initInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+		initInfo.CheckVkResultFn = VkImGui_CheckResult;
+		initInfo.MinAllocationSize = 1024 * 1024;
+
+		if ( !ImGui_ImplVulkan_Init( &initInfo ) ) {
+			common->Warning( "ImGui Vulkan: ImGui_ImplVulkan_Init failed" );
+			return false;
+		}
+
+		vkInitialized = true;
+		common->Printf( "ImGui Vulkan backend initialized\n" );
+		return true;
+	}
+
+	void Shutdown() override {
+		if ( vkInitialized ) {
+			if ( vkState.device != VK_NULL_HANDLE ) {
+				vkDeviceWaitIdle( vkState.device );
+			}
+			ImGui_ImplVulkan_Shutdown();
+			vkInitialized = false;
+			common->Printf( "ImGui Vulkan backend shut down\n" );
+		}
+	}
+
+	void NewFrame() override {
+		if ( vkInitialized ) {
+			ImGui_ImplVulkan_NewFrame();
+		}
+	}
+
+	void RenderDrawData() override {
+		if ( !vkInitialized ) {
+			return;
+		}
+
+		VkCommandBuffer cmdBuf = vkState.activeCommandBuffer;
+		if ( cmdBuf == VK_NULL_HANDLE ) {
+			return;
+		}
+
+		ImDrawData *drawData = ImGui::GetDrawData();
+		if ( drawData != NULL ) {
+			ImGui_ImplVulkan_RenderDrawData( drawData, cmdBuf );
+		}
+	}
+
+private:
+	bool vkInitialized;
+};
+
+#endif // ID_VULKAN
+
+// ============================================================================
+// Factory function
+// ============================================================================
+
 idRenderImGuiBackend* CreateRenderImGuiBackend() {
+#ifdef ID_VULKAN
+	extern idCVar r_renderBackend;
+	if ( idStr::Icmp( r_renderBackend.GetString(), "vulkan" ) == 0 ) {
+		return new idRenderImGuiBackendVulkan();
+	}
+#endif
 	return new idRenderImGuiBackendGL2();
 }
 

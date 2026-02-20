@@ -1351,3 +1351,160 @@ void GLimp_UpdateWindowSize()
 	}
 #endif
 }
+
+// ============================================================================
+// VkImp_* — Vulkan window/surface helpers (share SDL window with GLimp)
+// ============================================================================
+
+#ifdef ID_VULKAN
+
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+#include <SDL_vulkan.h>
+#endif
+
+bool VkImp_Init( glimpParms_t parms ) {
+	common->Printf( "Initializing Vulkan subsystem (SDL window)\n" );
+
+	assert( SDL_WasInit( SDL_INIT_VIDEO ) );
+
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+	My_SDL_WindowFlags flags = SDL_WINDOW_VULKAN;
+
+	if ( parms.fullScreen == 1 ) {
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+		if ( parms.fullScreen && parms.fullScreenDesktop ) {
+			flags |= SDL_WINDOW_FULLSCREEN;
+		}
+#elif SDL_VERSION_ATLEAST(2, 0, 0)
+		flags |= parms.fullScreenDesktop ? SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_WINDOW_FULLSCREEN;
+#endif
+	}
+
+	r_windowResizable.ClearModified();
+	flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+	if ( r_windowResizable.GetBool() ) {
+		flags |= SDL_WINDOW_RESIZABLE;
+	}
+
+	// --- display selection (same logic as GLimp_Init) ---
+	Uint32 selectedDisplay = 0;
+#if SDL_VERSION_ATLEAST(2, 0, 4)
+	{
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+		float x, y;
+		int numDisplays = 0;
+		SDL_DisplayID *displayIDs = SDL_GetDisplays( &numDisplays );
+#else
+		int numDisplays = SDL_GetNumVideoDisplays();
+		int x, y;
+#endif
+		SDL_GetGlobalMouseState( &x, &y );
+		for ( int j = 0; j < numDisplays; ++j ) {
+			SDL_Rect rect;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+			SDL_DisplayID displayId_x = displayIDs[j];
+			if ( SDL_GetDisplayBounds( displayId_x, &rect ) ) {
+#else
+			int displayId_x = j;
+			if ( SDL_GetDisplayBounds( displayId_x, &rect ) == 0 ) {
+#endif
+				if ( x >= rect.x && x < rect.x + rect.w
+					&& y >= rect.y && y < rect.y + rect.h ) {
+					selectedDisplay = j;
+					break;
+				}
+			}
+		}
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+		if ( displayIDs != NULL ) {
+			selectedDisplay = displayIDs[selectedDisplay];
+			SDL_free( displayIDs );
+		}
+#endif
+	}
+#endif // SDL >= 2.0.4
+
+	// --- create window ---
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	SDL_PropertiesID props = SDL_CreateProperties();
+	SDL_SetStringProperty( props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, ENGINE_VERSION );
+	SDL_SetNumberProperty( props, SDL_PROP_WINDOW_CREATE_X_NUMBER, SDL_WINDOWPOS_UNDEFINED_DISPLAY( selectedDisplay ) );
+	SDL_SetNumberProperty( props, SDL_PROP_WINDOW_CREATE_Y_NUMBER, SDL_WINDOWPOS_UNDEFINED_DISPLAY( selectedDisplay ) );
+	SDL_SetNumberProperty( props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, parms.width );
+	SDL_SetNumberProperty( props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, parms.height );
+	SDL_SetNumberProperty( props, SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, flags );
+	window = SDL_CreateWindowWithProperties( props );
+	SDL_DestroyProperties( props );
+#else
+	window = SDL_CreateWindow( ENGINE_VERSION,
+		SDL_WINDOWPOS_UNDEFINED_DISPLAY( selectedDisplay ),
+		SDL_WINDOWPOS_UNDEFINED_DISPLAY( selectedDisplay ),
+		parms.width, parms.height, flags );
+#endif
+
+	if ( window == NULL ) {
+		common->Warning( "VkImp_Init: Couldn't create Vulkan window: %s", SDL_GetError() );
+		return false;
+	}
+
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	// Handle exclusive fullscreen for SDL3
+	if ( parms.fullScreen && !parms.fullScreenDesktop ) {
+		SDL_DisplayMode mode = {};
+		mode.w = parms.width;
+		mode.h = parms.height;
+		if ( parms.displayHz > 0 ) {
+			mode.refresh_rate = (float)parms.displayHz;
+		}
+		SDL_SetWindowFullscreenMode( window, &mode );
+		SDL_SetWindowFullscreen( window, true );
+		SDL_SyncWindow( window );
+	}
+#endif
+
+	SetSDLIcon();
+
+	// update glConfig with actual window size (used by input system, ImGui, etc.)
+	{
+		int ww = 0, wh = 0;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+		SDL_GetWindowSizeInPixels( window, &glConfig.vidWidth, &glConfig.vidHeight );
+#else
+		SDL_GetWindowSize( window, &glConfig.vidWidth, &glConfig.vidHeight );
+#endif
+		SDL_GetWindowSize( window, &ww, &wh );
+		glConfig.winWidth = (float)ww;
+		glConfig.winHeight = (float)wh;
+	}
+
+	glConfig.isFullscreen = ( SDL_GetWindowFlags( window ) & SDL_WINDOW_FULLSCREEN ) != 0;
+
+	common->Printf( "VkImp_Init: Created %dx%d Vulkan window\n", glConfig.vidWidth, glConfig.vidHeight );
+	return true;
+#else
+	common->Warning( "VkImp_Init: Vulkan requires SDL2 or later" );
+	return false;
+#endif // SDL >= 2.0.0
+}
+
+void VkImp_Shutdown() {
+	common->Printf( "Shutting down Vulkan subsystem\n" );
+
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+	if ( window ) {
+		SDL_DestroyWindow( window );
+		window = NULL;
+	}
+#endif
+}
+
+SDL_Window * VkImp_GetWindow() {
+	return window;
+}
+
+// void* wrapper to avoid pulling SDL headers into callers
+void * VkImp_GetWindowVoid() {
+	return (void *)window;
+}
+
+#endif // ID_VULKAN

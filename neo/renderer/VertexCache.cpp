@@ -70,10 +70,10 @@ void idVertexCache::ActuallyFree( vertCache_t *block ) {
 		staticAllocTotal -= block->size;
 		staticCountTotal--;
 
-		if ( block->vbo ) {
+		if ( block->bufferObject ) {
 #if 0		// this isn't really necessary, it will be reused soon enough
 			// filling with zero length data is the equivalent of freeing
-			qglBindBufferARB(GL_ARRAY_BUFFER_ARB, block->vbo);
+			qglBindBufferARB(GL_ARRAY_BUFFER_ARB, block->bufferObject);
 			qglBufferDataARB(GL_ARRAY_BUFFER_ARB, 0, 0, GL_DYNAMIC_DRAW_ARB);
 #endif
 		} else if ( block->virtMem ) {
@@ -118,18 +118,18 @@ void *idVertexCache::Position( vertCache_t *buffer ) {
 	}
 
 	// the ARB vertex object just uses an offset
-	if ( buffer->vbo ) {
+	if ( buffer->bufferObject ) {
 		if ( r_showVertexCache.GetInteger() == 2 ) {
 			if ( buffer->tag == TAG_TEMP ) {
-				common->Printf( "GL_ARRAY_BUFFER_ARB = %i + %zd (%i bytes)\n", buffer->vbo, buffer->offset, buffer->size );
+				common->Printf( "GL_ARRAY_BUFFER_ARB = %i + %zd (%i bytes)\n", buffer->bufferObject, buffer->offset, buffer->size );
 			} else {
-				common->Printf( "GL_ARRAY_BUFFER_ARB = %i (%i bytes)\n", buffer->vbo, buffer->size );
+				common->Printf( "GL_ARRAY_BUFFER_ARB = %i (%i bytes)\n", buffer->bufferObject, buffer->size );
 			}
 		}
 		if ( buffer->indexBuffer ) {
-			qglBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, buffer->vbo );
+			qglBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, buffer->bufferObject );
 		} else {
-			qglBindBufferARB( GL_ARRAY_BUFFER_ARB, buffer->vbo );
+			qglBindBufferARB( GL_ARRAY_BUFFER_ARB, buffer->bufferObject );
 		}
 		return (void *)buffer->offset;
 	}
@@ -239,13 +239,14 @@ void idVertexCache::Alloc( void *data, int size, vertCache_t **buffer, bool inde
 
 		for ( int i = 0; i < EXPAND_HEADERS; i++ ) {
 			block = headerAllocator.Alloc();
+			memset( block, 0, sizeof( *block ) );
 			block->next = freeStaticHeaders.next;
 			block->prev = &freeStaticHeaders;
 			block->next->prev = block;
 			block->prev->next = block;
 
 			if( !virtualMemory ) {
-				qglGenBuffersARB( 1, & block->vbo );
+				qglGenBuffersARB( 1, & block->bufferObject );
 			}
 		}
 	}
@@ -281,12 +282,12 @@ void idVertexCache::Alloc( void *data, int size, vertCache_t **buffer, bool inde
 	block->indexBuffer = indexBuffer;
 
 	// copy the data
-	if ( block->vbo ) {
+	if ( block->bufferObject ) {
 		if ( indexBuffer ) {
-			qglBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, block->vbo );
+			qglBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, block->bufferObject );
 			qglBufferDataARB( GL_ELEMENT_ARRAY_BUFFER_ARB, (GLsizeiptrARB)size, data, GL_STATIC_DRAW_ARB );
 		} else {
-			qglBindBufferARB( GL_ARRAY_BUFFER_ARB, block->vbo );
+			qglBindBufferARB( GL_ARRAY_BUFFER_ARB, block->bufferObject );
 			if ( allocatingTempBuffer ) {
 				qglBufferDataARB( GL_ARRAY_BUFFER_ARB, (GLsizeiptrARB)size, data, GL_STREAM_DRAW_ARB );
 			} else {
@@ -390,6 +391,7 @@ vertCache_t	*idVertexCache::AllocFrameTemp( void *data, int size ) {
 
 		for ( int i = 0; i < EXPAND_HEADERS; i++ ) {
 			block = headerAllocator.Alloc();
+			memset( block, 0, sizeof( *block ) );
 			block->next = freeDynamicHeaders.next;
 			block->prev = &freeDynamicHeaders;
 			block->next->prev = block;
@@ -417,10 +419,10 @@ vertCache_t	*idVertexCache::AllocFrameTemp( void *data, int size ) {
 
 	// copy the data
 	block->virtMem = tempBuffers[listNum]->virtMem;
-	block->vbo = tempBuffers[listNum]->vbo;
+	block->bufferObject = tempBuffers[listNum]->bufferObject;
 
-	if ( block->vbo ) {
-		qglBindBufferARB( GL_ARRAY_BUFFER_ARB, block->vbo );
+	if ( block->bufferObject ) {
+		qglBindBufferARB( GL_ARRAY_BUFFER_ARB, block->bufferObject );
 		qglBufferSubDataARB( GL_ARRAY_BUFFER_ARB, block->offset, (GLsizeiptrARB)size, data );
 	} else {
 		SIMDProcessor->Memcpy( (byte *)block->virtMem + block->offset, data, size );

@@ -36,6 +36,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "renderer/VertexCache.h"
 #include "renderer/RenderWorld_local.h"
 #include "renderer/RenderBackendPlatform.h"
+#include "renderer/RenderBackendDraw.h"
 
 #include "renderer/tr_local.h"
 
@@ -155,7 +156,9 @@ static void R_IssueRenderCommands( void ) {
 	// r_skipRender is usually more usefull, because it will still
 	// draw 2D graphics
 	if ( !r_skipBackEnd.GetBool() ) {
-		RB_ExecuteBackEndCommands( frameData->cmdHead );
+		if ( tr.backendDraw != NULL ) {
+			tr.backendDraw->ExecuteBackEndCommands( frameData->cmdHead );
+		}
 	}
 
 	R_ClearCommandChain();
@@ -693,9 +696,9 @@ void idRenderSystemLocal::BeginFrame( int windowWidth, int windowHeight ) {
 	cmd->frameCount = frameCount;
 
 	if ( r_frontBuffer.GetBool() ) {
-		cmd->buffer = (int)GL_FRONT;
+		cmd->buffer = DRAWBUFFER_FRONT;
 	} else {
-		cmd->buffer = (int)GL_BACK;
+		cmd->buffer = DRAWBUFFER_BACK;
 	}
 }
 
@@ -969,6 +972,13 @@ CaptureRenderToFile
 */
 void idRenderSystemLocal::CaptureRenderToFile( const char *fileName, bool fixAlpha ) {
 	if ( !glConfig.isInitialized ) {
+		return;
+	}
+
+	// CaptureRenderToFile uses direct GL readback — not available in Vulkan.
+	// TODO: implement via the Vulkan screenshot pipeline.
+	if ( glConfig.isVulkan ) {
+		common->Warning( "CaptureRenderToFile not yet implemented for Vulkan" );
 		return;
 	}
 

@@ -440,7 +440,7 @@ static void	RB_SetBuffer( const void *data ) {
 
 	backEnd.frameCount = cmd->frameCount;
 
-	qglDrawBuffer( cmd->buffer );
+	qglDrawBuffer( cmd->buffer == DRAWBUFFER_FRONT ? GL_FRONT : GL_BACK );
 
 	// clear screen for debugging
 	// automatically enable this with several other debug tools

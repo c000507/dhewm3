@@ -368,8 +368,8 @@ static void R_BorderClampImage( idImage *image ) {
 	image->GenerateImage( (byte *)data, BORDER_CLAMP_SIZE, BORDER_CLAMP_SIZE,
 		TF_LINEAR /* TF_NEAREST */, false, TR_CLAMP_TO_BORDER, TD_DEFAULT );
 
-	if ( !glConfig.isInitialized ) {
-		// can't call qglTexParameterfv yet
+	if ( !glConfig.isInitialized || glConfig.isVulkan ) {
+		// can't call qglTexParameterfv yet (or not at all in Vulkan mode)
 		return;
 	}
 	// explicit zero border

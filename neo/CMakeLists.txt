@@ -250,6 +250,70 @@ else()
 	add_definitions(-DIMGUI_DISABLE)
 endif()
 
+find_package(Vulkan QUIET)
+if(Vulkan_FOUND)
+	option(VULKAN_RENDERER "Enable Vulkan renderer backend" ON)
+else()
+	option(VULKAN_RENDERER "Enable Vulkan renderer backend" OFF)
+endif()
+
+if(VULKAN_RENDERER)
+	if(NOT Vulkan_FOUND)
+		message(FATAL_ERROR "VULKAN_RENDERER is enabled but Vulkan SDK was not found")
+	endif()
+	message(STATUS "Vulkan renderer enabled (Vulkan ${Vulkan_VERSION})")
+	add_definitions(-DID_VULKAN)
+	include_directories(${Vulkan_INCLUDE_DIRS})
+
+	# SPIR-V shader compilation and embedding
+	find_program(GLSLANG_VALIDATOR glslangValidator)
+	if(GLSLANG_VALIDATOR)
+		message(STATUS "Found glslangValidator: ${GLSLANG_VALIDATOR}")
+		set(GLSL_SHADER_DIR "${CMAKE_SOURCE_DIR}/glslprogs")
+		set(SPIRV_OUTPUT_DIR "${CMAKE_BINARY_DIR}/glslprogs")
+		set(SPIRV_HEADER_DIR "${CMAKE_BINARY_DIR}/generated")
+		file(MAKE_DIRECTORY ${SPIRV_OUTPUT_DIR})
+		file(MAKE_DIRECTORY ${SPIRV_HEADER_DIR})
+
+		# Make the generated headers available to the build
+		include_directories(${CMAKE_BINARY_DIR})
+
+		file(GLOB GLSL_SOURCES "${GLSL_SHADER_DIR}/*.vert" "${GLSL_SHADER_DIR}/*.frag")
+		set(SPIRV_HEADER_OUTPUTS "")
+		foreach(GLSL_SRC ${GLSL_SOURCES})
+			get_filename_component(GLSL_NAME ${GLSL_SRC} NAME)
+			set(SPIRV_OUT "${SPIRV_OUTPUT_DIR}/${GLSL_NAME}.spv")
+			# Convert e.g. "depth_fill.vert.spv" to "depth_fill_vert_spv"
+			string(REPLACE "." "_" ARRAY_NAME "${GLSL_NAME}_spv")
+			set(HEADER_OUT "${SPIRV_HEADER_DIR}/${ARRAY_NAME}.h")
+
+			add_custom_command(
+				OUTPUT ${SPIRV_OUT}
+				COMMAND ${GLSLANG_VALIDATOR} -V ${GLSL_SRC} -o ${SPIRV_OUT}
+				DEPENDS ${GLSL_SRC}
+				COMMENT "Compiling SPIR-V: ${GLSL_NAME}"
+			)
+			add_custom_command(
+				OUTPUT ${HEADER_OUT}
+				COMMAND ${CMAKE_COMMAND}
+					-DINPUT_FILE=${SPIRV_OUT}
+					-DOUTPUT_FILE=${HEADER_OUT}
+					-DARRAY_NAME=${ARRAY_NAME}
+					-P ${CMAKE_SOURCE_DIR}/sys/cmake/SpirvToHeader.cmake
+				DEPENDS ${SPIRV_OUT}
+				COMMENT "Embedding SPIR-V: ${GLSL_NAME} -> ${ARRAY_NAME}.h"
+			)
+			list(APPEND SPIRV_HEADER_OUTPUTS ${HEADER_OUT})
+		endforeach()
+
+		add_custom_target(spirv_shaders DEPENDS ${SPIRV_HEADER_OUTPUTS})
+	else()
+		message(WARNING "glslangValidator not found — SPIR-V shaders will not be compiled")
+	endif()
+else()
+	message(STATUS "Vulkan renderer disabled")
+endif()
+
 if(DEFINED ENV{MSYSTEM})
 	message(STATUS "Detected MSYS or similar environment. Using alternate curl path")
 	set(CURL_NO_CURL_CMAKE ON)
@@ -622,6 +686,7 @@ set(src_renderer
 	renderer/Model_prt.cpp
 	renderer/Model_sprite.cpp
 	renderer/RenderBackendPlatform.cpp
+	renderer/RenderBackendDrawGL.cpp
 	renderer/RenderEntity.cpp
 	renderer/RenderImGui.cpp
 	renderer/RenderSystem.cpp
@@ -655,6 +720,19 @@ set(src_renderer
 )
 
 always_optimize_sourcefile(renderer/stblib_impls.c)
+
+if(VULKAN_RENDERER)
+	list(APPEND src_renderer
+		renderer/vk/VulkanBackendPlatform.cpp
+		renderer/vk/VulkanBackendDraw.cpp
+		renderer/vk/VulkanFrameSync.cpp
+		renderer/vk/VulkanAllocator.cpp
+		renderer/vk/VulkanRenderPass.cpp
+		renderer/vk/VulkanImage.cpp
+		renderer/vk/VulkanPipeline.cpp
+		renderer/vk/VulkanDescriptorAllocator.cpp
+	)
+endif()
 
 # I'm a bit sloppy with headers and just glob them in..
 # they're only handled in CMake at all so they turn up in Visual Studio solutions..
@@ -875,9 +953,13 @@ if(IMGUI)
 		set(src_imgui libs/imgui/backends/imgui_impl_sdl2.cpp)
 	endif()
 
+if(VULKAN_RENDERER)
+	set(src_imgui ${src_imgui} libs/imgui/backends/imgui_impl_vulkan.cpp)
+endif()
+
 set(src_imgui ${src_imgui}
 	libs/imgui/backends/imgui_impl_opengl2.cpp
-	
+
 	libs/imgui/imgui.h
 	libs/imgui/imgui.cpp
 	libs/imgui/imgui_draw.cpp
@@ -1335,6 +1417,13 @@ endif()
 		${SDLx_LIBRARY}
 		${sys_libs}
 	)
+
+	if(VULKAN_RENDERER)
+		target_link_libraries(${DHEWM3BINARY} Vulkan::Vulkan)
+		if(TARGET spirv_shaders)
+			add_dependencies(${DHEWM3BINARY} spirv_shaders)
+		endif()
+	endif()
 
 	if(NOT APPLE AND NOT WIN32)
 		install(TARGETS ${DHEWM3BINARY}

@@ -330,7 +330,7 @@ void RB_ARB2_DrawInteractions( void ) {
 
 
 typedef struct {
-	GLenum			target;
+	int				target;		// ARBPROGRAM_VERTEX or ARBPROGRAM_FRAGMENT
 	GLuint			ident;
 	char			name[64];
 } progDef_t;
@@ -339,23 +339,23 @@ static	const int	MAX_GLPROGS = 200;
 
 // a single file can have both a vertex program and a fragment program
 static progDef_t	progs[MAX_GLPROGS] = {
-	{ GL_VERTEX_PROGRAM_ARB, VPROG_TEST, "test.vfp" },
-	{ GL_FRAGMENT_PROGRAM_ARB, FPROG_TEST, "test.vfp" },
-	{ GL_VERTEX_PROGRAM_ARB, VPROG_INTERACTION, "interaction.vfp" },
-	{ GL_FRAGMENT_PROGRAM_ARB, FPROG_INTERACTION, "interaction.vfp" },
-	{ GL_VERTEX_PROGRAM_ARB, VPROG_BUMPY_ENVIRONMENT, "bumpyEnvironment.vfp" },
-	{ GL_FRAGMENT_PROGRAM_ARB, FPROG_BUMPY_ENVIRONMENT, "bumpyEnvironment.vfp" },
-	{ GL_VERTEX_PROGRAM_ARB, VPROG_AMBIENT, "ambientLight.vfp" },
-	{ GL_FRAGMENT_PROGRAM_ARB, FPROG_AMBIENT, "ambientLight.vfp" },
-	{ GL_VERTEX_PROGRAM_ARB, VPROG_STENCIL_SHADOW, "shadow.vp" },
-	{ GL_VERTEX_PROGRAM_ARB, VPROG_ENVIRONMENT, "environment.vfp" },
-	{ GL_FRAGMENT_PROGRAM_ARB, FPROG_ENVIRONMENT, "environment.vfp" },
-	{ GL_VERTEX_PROGRAM_ARB, VPROG_GLASSWARP, "arbVP_glasswarp.txt" },
-	{ GL_FRAGMENT_PROGRAM_ARB, FPROG_GLASSWARP, "arbFP_glasswarp.txt" },
+	{ ARBPROGRAM_VERTEX, VPROG_TEST, "test.vfp" },
+	{ ARBPROGRAM_FRAGMENT, FPROG_TEST, "test.vfp" },
+	{ ARBPROGRAM_VERTEX, VPROG_INTERACTION, "interaction.vfp" },
+	{ ARBPROGRAM_FRAGMENT, FPROG_INTERACTION, "interaction.vfp" },
+	{ ARBPROGRAM_VERTEX, VPROG_BUMPY_ENVIRONMENT, "bumpyEnvironment.vfp" },
+	{ ARBPROGRAM_FRAGMENT, FPROG_BUMPY_ENVIRONMENT, "bumpyEnvironment.vfp" },
+	{ ARBPROGRAM_VERTEX, VPROG_AMBIENT, "ambientLight.vfp" },
+	{ ARBPROGRAM_FRAGMENT, FPROG_AMBIENT, "ambientLight.vfp" },
+	{ ARBPROGRAM_VERTEX, VPROG_STENCIL_SHADOW, "shadow.vp" },
+	{ ARBPROGRAM_VERTEX, VPROG_ENVIRONMENT, "environment.vfp" },
+	{ ARBPROGRAM_FRAGMENT, FPROG_ENVIRONMENT, "environment.vfp" },
+	{ ARBPROGRAM_VERTEX, VPROG_GLASSWARP, "arbVP_glasswarp.txt" },
+	{ ARBPROGRAM_FRAGMENT, FPROG_GLASSWARP, "arbFP_glasswarp.txt" },
 
 	// SteveL #3878: Particle softening applied by the engine
-	{ GL_VERTEX_PROGRAM_ARB, VPROG_SOFT_PARTICLE, "soft_particle.vfp" },
-	{ GL_FRAGMENT_PROGRAM_ARB, FPROG_SOFT_PARTICLE, "soft_particle.vfp" },
+	{ ARBPROGRAM_VERTEX, VPROG_SOFT_PARTICLE, "soft_particle.vfp" },
+	{ ARBPROGRAM_FRAGMENT, FPROG_SOFT_PARTICLE, "soft_particle.vfp" },
 
 	// additional programs can be dynamically specified in materials
 };
@@ -545,14 +545,14 @@ void R_LoadARBProgram( int progIndex ) {
 	// vertex and fragment programs can both be present in a single file, so
 	// scan for the proper header to be the start point, and stamp a 0 in after the end
 
-	if ( progs[progIndex].target == GL_VERTEX_PROGRAM_ARB ) {
+	if ( progs[progIndex].target == ARBPROGRAM_VERTEX ) {
 		if ( !glConfig.ARBVertexProgramAvailable ) {
 			common->Printf( ": GL_VERTEX_PROGRAM_ARB not available\n" );
 			return;
 		}
 		start = strstr( buffer, "!!ARBvp" );
 	}
-	if ( progs[progIndex].target == GL_FRAGMENT_PROGRAM_ARB ) {
+	if ( progs[progIndex].target == ARBPROGRAM_FRAGMENT ) {
 		if ( !glConfig.ARBFragmentProgramAvailable ) {
 			common->Printf( ": GL_FRAGMENT_PROGRAM_ARB not available\n" );
 			return;
@@ -572,7 +572,7 @@ void R_LoadARBProgram( int progIndex ) {
 	end[3] = 0;
 
 	// DG: hack gamma correction into shader
-	if ( r_gammaInShader.GetBool() && progs[progIndex].target == GL_FRAGMENT_PROGRAM_ARB
+	if ( r_gammaInShader.GetBool() && progs[progIndex].target == ARBPROGRAM_FRAGMENT
 	     && strstr( start, "nodhewm3gammahack" ) == NULL )
 	{
 
@@ -686,10 +686,13 @@ void R_LoadARBProgram( int progIndex ) {
 		start = outStr;
 	}
 
-	qglBindProgramARB( progs[progIndex].target, progs[progIndex].ident );
+	GLenum glTarget = ( progs[progIndex].target == ARBPROGRAM_VERTEX )
+		? GL_VERTEX_PROGRAM_ARB : GL_FRAGMENT_PROGRAM_ARB;
+
+	qglBindProgramARB( glTarget, progs[progIndex].ident );
 	qglGetError();
 
-	qglProgramStringARB( progs[progIndex].target, GL_PROGRAM_FORMAT_ASCII_ARB,
+	qglProgramStringARB( glTarget, GL_PROGRAM_FORMAT_ASCII_ARB,
 		strlen( start ), start );
 
 	err = qglGetError();
@@ -723,7 +726,7 @@ Returns a GL identifier that can be bound to the given target, parsing
 a text file if it hasn't already been loaded.
 ==================
 */
-int R_FindARBProgram( GLenum target, const char *program ) {
+int R_FindARBProgram( int target, const char *program ) {
 	int		i;
 	idStr	stripped = program;
 

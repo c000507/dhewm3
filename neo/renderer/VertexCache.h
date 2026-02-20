@@ -27,7 +27,6 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "framework/CVarSystem.h"
-#include "renderer/qgl.h"
 
 // vertex cache calls should only be made by the front end
 
@@ -41,8 +40,8 @@ typedef enum {
 } vertBlockTag_t;
 
 typedef struct vertCache_s {
-	GLuint			vbo;
-	void			*virtMem;			// only one of vbo / virtMem will be set
+	unsigned int	bufferObject;		// GPU buffer handle (GLuint for GL, opaque handle for Vulkan)
+	void			*virtMem;			// only one of bufferObject / virtMem will be set
 	bool			indexBuffer;		// holds indexes instead of vertexes
 
 	intptr_t		offset;

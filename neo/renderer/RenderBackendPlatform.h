@@ -31,7 +31,9 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "renderer/RenderSystem.h"
 #include "renderer/RenderBackendGPU.h"
-#include "renderer/qgl.h"
+
+// API-neutral function pointer type for extension loading (replaces GLExtension_t dependency)
+typedef void (*gpuExtensionPointer_t)(void);
 
 typedef struct renderBackendConfig_s {
 	int			width;
@@ -65,7 +67,7 @@ public:
 	virtual bool			SetWindowResizable( bool enableResizable ) = 0;
 	virtual void			ResetGamma() = 0;
 	virtual void			GetState( renderBackendState_t &state ) const = 0;
-	virtual GLExtension_t	GetExtensionPointer( const char *name ) const = 0;
+	virtual gpuExtensionPointer_t	GetExtensionPointer( const char *name ) const = 0;
 	virtual idRenderGpuCommandContext* GetImmediateContext() = 0;
 };
 

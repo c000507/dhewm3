@@ -32,6 +32,10 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "renderer/Image.h"
 
+#ifdef ID_VULKAN
+#include "renderer/vk/VulkanImage.h"
+#endif
+
 /*
 PROBLEM: compressed textures may break the zero clamp rule!
 */
@@ -208,7 +212,7 @@ SelectInternalFormat
 This may need to scan six cube map images
 ===============
 */
-GLenum idImage::SelectInternalFormat( const byte **dataPtrs, int numDataPtrs, int width, int height,
+int idImage::SelectInternalFormat( const byte **dataPtrs, int numDataPtrs, int width, int height,
 									 textureDepth_t minimumDepth ) const {
 	int		i, c;
 	const byte	*scan;
@@ -535,6 +539,35 @@ void idImage::GenerateImage( const byte *pic, int width, int height,
 		return;
 	}
 
+#ifdef ID_VULKAN
+	if ( glConfig.isVulkan ) {
+		// Create a Vulkan texture if the texture manager is ready.
+		// During early init (before backendDraw->Init()), vkTextureMgr
+		// is not yet initialized — those textures will be created later
+		// when VK_LoadAllImages() is called from the draw backend.
+		if ( vkTextureMgr.IsInitialized() && pic != NULL && width > 0 && height > 0 ) {
+			if ( vkHandle != 0 ) {
+				vkTextureMgr.FreeHandle( vkHandle );
+				vkHandle = 0;
+			}
+			vkHandle = vkTextureMgr.AllocHandle();
+			if ( vkHandle != 0 ) {
+				VkFilter vkFilter = ( filter == TF_NEAREST ) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+				VkSamplerAddressMode vkAddr = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+				if ( repeat == TR_CLAMP || repeat == TR_CLAMP_TO_ZERO || repeat == TR_CLAMP_TO_ZERO_ALPHA ) {
+					vkAddr = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				}
+				vkTextureMgr.CreateTexture2D( vkHandle, pic, width, height,
+					1, VK_FORMAT_R8G8B8A8_UNORM, vkFilter, vkFilter, vkAddr );
+				uploadWidth = width;
+				uploadHeight = height;
+				type = TT_2D;
+			}
+		}
+		return;
+	}
+#endif
+
 	// don't let mip mapping smear the texture into the clamped border
 	if ( repeat == TR_CLAMP_TO_ZERO ) {
 		preserveBorder = true;
@@ -753,6 +786,32 @@ void idImage::Generate3DImage( const byte *pic, int width, int height, int picDe
 		return;
 	}
 
+#ifdef ID_VULKAN
+	if ( glConfig.isVulkan ) {
+		if ( vkTextureMgr.IsInitialized() && pic != NULL && width > 0 && height > 0 && picDepth > 0 ) {
+			if ( vkHandle != 0 ) {
+				vkTextureMgr.FreeHandle( vkHandle );
+				vkHandle = 0;
+			}
+			vkHandle = vkTextureMgr.AllocHandle();
+			if ( vkHandle != 0 ) {
+				VkFilter vkFilter = ( filter == TF_NEAREST ) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+				VkSamplerAddressMode vkAddr = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+				if ( repeat == TR_CLAMP || repeat == TR_CLAMP_TO_ZERO || repeat == TR_CLAMP_TO_ZERO_ALPHA ) {
+					vkAddr = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				}
+				vkTextureMgr.CreateTexture3D( vkHandle, pic, width, height, picDepth,
+					1, VK_FORMAT_R8G8B8A8_UNORM, vkFilter, vkFilter, vkAddr );
+				uploadWidth = width;
+				uploadHeight = height;
+				uploadDepth = picDepth;
+				type = TT_3D;
+			}
+		}
+		return;
+	}
+#endif
+
 	// make sure it is a power of 2
 	scaled_width = MakePowerOfTwo( width );
 	scaled_height = MakePowerOfTwo( height );
@@ -891,6 +950,26 @@ void idImage::GenerateCubeImage( const byte *pic[6], int size,
 	if ( !glConfig.isInitialized ) {
 		return;
 	}
+
+#ifdef ID_VULKAN
+	if ( glConfig.isVulkan ) {
+		if ( vkTextureMgr.IsInitialized() && pic != NULL && size > 0 ) {
+			if ( vkHandle != 0 ) {
+				vkTextureMgr.FreeHandle( vkHandle );
+				vkHandle = 0;
+			}
+			vkHandle = vkTextureMgr.AllocHandle();
+			if ( vkHandle != 0 ) {
+				VkFilter vkFilter = ( filter == TF_NEAREST ) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+				vkTextureMgr.CreateTextureCube( vkHandle, pic, size,
+					1, VK_FORMAT_R8G8B8A8_UNORM, vkFilter, vkFilter );
+				uploadWidth = size;
+				uploadHeight = size;
+			}
+		}
+		return;
+	}
+#endif
 
 	if ( ! glConfig.cubeMapAvailable ) {
 		return;
@@ -1053,7 +1132,7 @@ void idImage::WritePrecompressedImage() {
 		}
 	}
 
-	if ( !glConfig.isInitialized ) {
+	if ( !glConfig.isInitialized || glConfig.isVulkan ) {
 		return;
 	}
 
@@ -1732,14 +1811,59 @@ void	idImage::ActuallyLoadImage( bool checkForPrecompressed, bool fromBackEnd ) 
 
 //=========================================================================================================
 
+#ifdef ID_VULKAN
+/*
+===============
+VK_LoadAllImages
+
+Re-invokes generator functions for all built-in images and reloads
+file-based images that were registered before the Vulkan texture manager
+was initialized. Call this after vkTextureMgr.Init().
+===============
+*/
+void VK_LoadAllImages() {
+	if ( !vkTextureMgr.IsInitialized() ) {
+		return;
+	}
+
+	common->Printf( "Loading Vulkan textures for %d images...\n", globalImages->images.Num() );
+	int loaded = 0;
+	for ( int i = 0; i < globalImages->images.Num(); i++ ) {
+		idImage *image = globalImages->images[i];
+		if ( image->vkHandle != 0 ) {
+			continue;	// already has a Vulkan texture
+		}
+
+		if ( image->generatorFunction ) {
+			// Re-invoke the generator (e.g. R_WhiteImage, R_FlatNormalImage)
+			image->generatorFunction( image );
+			if ( image->vkHandle != 0 ) {
+				loaded++;
+			}
+		}
+		// Skip file-based images at startup — they'll be loaded on demand
+		// during level load when ActuallyLoadImage is called naturally.
+	}
+	common->Printf( "  %d Vulkan textures loaded\n", loaded );
+}
+#endif
+
 /*
 ===============
 PurgeImage
 ===============
 */
 void idImage::PurgeImage() {
+#ifdef ID_VULKAN
+	if ( vkHandle != 0 && vkTextureMgr.IsInitialized() ) {
+		vkTextureMgr.FreeHandle( vkHandle );
+		vkHandle = 0;
+	}
+#endif
 	if ( texnum != TEXTURE_NOT_LOADED ) {
-		qglDeleteTextures( 1, &texnum );	// this should be the ONLY place it is ever called!
+		if ( !glConfig.isVulkan ) {
+			qglDeleteTextures( 1, &texnum );	// this should be the ONLY place it is ever called!
+		}
 		texnum = TEXTURE_NOT_LOADED;
 	}
 
