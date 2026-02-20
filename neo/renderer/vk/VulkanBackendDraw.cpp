@@ -136,6 +136,8 @@ private:
 	// MVP matrix helpers
 	void				VK_ComputeMVP( const float *modelView, const float *projection,
 						float *mvp );
+	void				VK_SetDepthHack( const viewEntity_t *space );
+	const float *		VK_GetProjectionForSurf( const viewEntity_t *space, float *scratchProj );
 
 	// Subsystems
 	idVulkanFrameSync			frameSync;
@@ -818,10 +820,14 @@ void idRenderBackendDrawVulkan::VK_FillDepthBuffer() {
 			backEnd.currentScissor = surf->scissorRect;
 		}
 
-		// Compute MVP: projection * modelView
+		// Apply weapon/model depth hack (adjusts viewport depth range + projection)
+		VK_SetDepthHack( surf->space );
+
+		// Compute MVP: projection * modelView, with depth hack applied
 		float mvp[16];
+		float scratchProj[16];
 		VK_ComputeMVP( surf->space->modelViewMatrix,
-			viewDef->projectionMatrix, mvp );
+			VK_GetProjectionForSurf( surf->space, scratchProj ), mvp );
 
 		// Push MVP as push constant
 		vkCmdPushConstants( currentCmdBuf, depthLayout,
@@ -1259,10 +1265,12 @@ void idRenderBackendDrawVulkan::VK_CreateDrawInteractions( const drawSurf_t *sur
 		vkCmdBindIndexBuffer( currentCmdBuf, idxRef.buffer, idxRef.offset,
 			VK_INDEX_TYPE_UINT32 );
 
-		// Push MVP
+		// Apply weapon/model depth hack and push MVP
+		VK_SetDepthHack( surf->space );
 		float mvp[16];
+		float scratchProj[16];
 		VK_ComputeMVP( surf->space->modelViewMatrix,
-			currentViewDef->projectionMatrix, mvp );
+			VK_GetProjectionForSurf( surf->space, scratchProj ), mvp );
 		vkCmdPushConstants( currentCmdBuf, interactionLayout,
 			VK_SHADER_STAGE_VERTEX_BIT, 0, 64, mvp );
 
@@ -1343,13 +1351,14 @@ int idRenderBackendDrawVulkan::VK_DrawShaderPasses( const drawSurf_t **drawSurfs
 
 		const float *regs = surf->shaderRegisters;
 
-		// Handle model space change — recompute MVP
+		// Handle model space change or depth hack change — recompute MVP
 		bool spaceChanged = ( surf->space != backEnd.currentSpace );
 		if ( spaceChanged ) {
 			backEnd.currentSpace = surf->space;
+			VK_SetDepthHack( surf->space );
+			float scratchProj[16];
 			VK_ComputeMVP( surf->space->modelViewMatrix,
-				currentViewDef->projectionMatrix, currentMVP );
-
+				VK_GetProjectionForSurf( surf->space, scratchProj ), currentMVP );
 		}
 
 		// Set scissor
@@ -1992,6 +2001,53 @@ void idRenderBackendDrawVulkan::VK_ComputeMVP( const float *modelView,
 				proj[3 * 4 + j] * modelView[i * 4 + 3];
 		}
 	}
+}
+
+// Apply weapon/model depth hack to the base projection matrix and set the
+// appropriate Vulkan viewport depth range.  Must be called before computing
+// MVP for each surface.  Returns the (possibly modified) projection to use.
+// Mirrors GL's RB_EnterWeaponDepthHack / RB_EnterModelDepthHack behaviour.
+void idRenderBackendDrawVulkan::VK_SetDepthHack( const viewEntity_t *space )
+{
+	const viewDef_t *viewDef = currentViewDef;
+	float vpWidth  = (float)( viewDef->viewport.x2 - viewDef->viewport.x1 + 1 );
+	float vpHeight = (float)( viewDef->viewport.y2 - viewDef->viewport.y1 + 1 );
+
+	VkViewport viewport = {};
+	viewport.x      = (float)viewDef->viewport.x1;
+	viewport.y      = (float)viewDef->viewport.y1 + vpHeight;
+	viewport.width  = vpWidth;
+	viewport.height = -vpHeight;
+
+	if ( space && space->weaponDepthHack ) {
+		// Weapons occupy depth range [0, 0.5] so they never clip through world
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 0.5f;
+	} else {
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+	}
+	vkCmdSetViewport( currentCmdBuf, 0, 1, &viewport );
+}
+
+// Returns the projection matrix to use for this surface, applying the depth
+// hack offsets (weapon: scale Z; model: bias Z) before the Vulkan Z remap
+// performed inside VK_ComputeMVP.
+const float *idRenderBackendDrawVulkan::VK_GetProjectionForSurf(
+	const viewEntity_t *space, float *scratchProj )
+{
+	const float *base = currentViewDef->projectionMatrix;
+
+	if ( space && ( space->weaponDepthHack || space->modelDepthHack != 0.0f ) ) {
+		memcpy( scratchProj, base, 64 );
+		if ( space->weaponDepthHack ) {
+			scratchProj[14] *= 0.25f;
+		} else {
+			scratchProj[14] -= space->modelDepthHack;
+		}
+		return scratchProj;
+	}
+	return base;
 }
 
 // ---------------------------------------------------------------------------

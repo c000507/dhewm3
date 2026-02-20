@@ -75,6 +75,8 @@ void idRenderBackendDrawGL::ReadPixels( int x, int y, int width, int height, byt
 #ifdef ID_VULKAN
 // Defined in vk/VulkanBackendDraw.cpp
 extern idRenderBackendDraw * R_GetVulkanBackendDraw();
+// Defined in vk-ray/VulkanBackendDraw.cpp
+extern idRenderBackendDraw * R_GetVulkanRayBackendDraw();
 #endif
 
 // ---------------------------------------------------------------------------
@@ -85,6 +87,9 @@ idRenderBackendDraw * R_CreateBackendDraw() {
 #ifdef ID_VULKAN
 	if ( idStr::Icmp( r_renderBackend.GetString(), "vulkan" ) == 0 ) {
 		return R_GetVulkanBackendDraw();
+	}
+	if ( idStr::Icmp( r_renderBackend.GetString(), "vulkan-ray" ) == 0 ) {
+		return R_GetVulkanRayBackendDraw();
 	}
 #endif
 	return &s_glBackendDraw;

@@ -306,6 +306,39 @@ if(VULKAN_RENDERER)
 			list(APPEND SPIRV_HEADER_OUTPUTS ${HEADER_OUT})
 		endforeach()
 
+		# RT shaders: .rgen, .rmiss, .rchit require SPIR-V 1.4 (--target-env vulkan1.2)
+		set(RT_SHADER_SOURCES
+			rt_raygen.rgen
+			rt_miss.rmiss
+			rt_shadow_miss.rmiss
+			rt_hit.rchit
+		)
+		foreach(RT_SRC ${RT_SHADER_SOURCES})
+			set(RT_GLSL_FULL "${GLSL_SHADER_DIR}/${RT_SRC}")
+			set(RT_SPIRV_OUT "${SPIRV_OUTPUT_DIR}/${RT_SRC}.spv")
+			string(REPLACE "." "_" RT_ARRAY_NAME "${RT_SRC}_spv")
+			set(RT_HEADER_OUT "${SPIRV_HEADER_DIR}/${RT_ARRAY_NAME}.h")
+
+			add_custom_command(
+				OUTPUT ${RT_SPIRV_OUT}
+				COMMAND ${GLSLANG_VALIDATOR} --target-env vulkan1.2 -V
+				        ${RT_GLSL_FULL} -o ${RT_SPIRV_OUT}
+				DEPENDS ${RT_GLSL_FULL}
+				COMMENT "Compiling RT SPIR-V: ${RT_SRC}"
+			)
+			add_custom_command(
+				OUTPUT ${RT_HEADER_OUT}
+				COMMAND ${CMAKE_COMMAND}
+					-DINPUT_FILE=${RT_SPIRV_OUT}
+					-DOUTPUT_FILE=${RT_HEADER_OUT}
+					-DARRAY_NAME=${RT_ARRAY_NAME}
+					-P ${CMAKE_SOURCE_DIR}/sys/cmake/SpirvToHeader.cmake
+				DEPENDS ${RT_SPIRV_OUT}
+				COMMENT "Embedding RT SPIR-V: ${RT_SRC} -> ${RT_ARRAY_NAME}.h"
+			)
+			list(APPEND SPIRV_HEADER_OUTPUTS ${RT_HEADER_OUT})
+		endforeach()
+
 		add_custom_target(spirv_shaders DEPENDS ${SPIRV_HEADER_OUTPUTS})
 	else()
 		message(WARNING "glslangValidator not found — SPIR-V shaders will not be compiled")
@@ -731,6 +764,9 @@ if(VULKAN_RENDERER)
 		renderer/vk/VulkanImage.cpp
 		renderer/vk/VulkanPipeline.cpp
 		renderer/vk/VulkanDescriptorAllocator.cpp
+		renderer/vk-ray/VulkanBackendDraw.cpp
+		renderer/vk-ray/VulkanRayPipeline.cpp
+		renderer/vk-ray/VulkanAccelStructure.cpp
 	)
 endif()
 

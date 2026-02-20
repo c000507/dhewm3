@@ -39,12 +39,25 @@ If you have questions concerning this license or the applicable additional terms
 #include "renderer/RenderBackendPlatform.h"
 #include "renderer/tr_local.h"
 #include "renderer/vk/VulkanState.h"
+#include "renderer/vk-ray/VulkanRTFuncs.h"
 #include "framework/Common.h"
 #include "framework/CVarSystem.h"
 #include "sound/sound.h"
 #include "sys/sys_imgui.h"
 #include <cstring>
 #include <vector>
+
+// RT extension function pointers — loaded after vkCreateDevice when
+// r_renderBackend is "vulkan-ray".  Defined here, declared extern in VulkanRTFuncs.h.
+PFN_vkCreateAccelerationStructureKHR            pfn_vkCreateAccelerationStructureKHR;
+PFN_vkDestroyAccelerationStructureKHR           pfn_vkDestroyAccelerationStructureKHR;
+PFN_vkGetAccelerationStructureBuildSizesKHR     pfn_vkGetAccelerationStructureBuildSizesKHR;
+PFN_vkCmdBuildAccelerationStructuresKHR         pfn_vkCmdBuildAccelerationStructuresKHR;
+PFN_vkGetAccelerationStructureDeviceAddressKHR  pfn_vkGetAccelerationStructureDeviceAddressKHR;
+PFN_vkCreateRayTracingPipelinesKHR              pfn_vkCreateRayTracingPipelinesKHR;
+PFN_vkGetRayTracingShaderGroupHandlesKHR        pfn_vkGetRayTracingShaderGroupHandlesKHR;
+PFN_vkCmdTraceRaysKHR                           pfn_vkCmdTraceRaysKHR;
+PFN_vkGetBufferDeviceAddressKHR                 pfn_vkGetBufferDeviceAddressKHR;
 
 // Global Vulkan state shared with draw backend and subsystems
 vulkanState_t vkState;
@@ -440,18 +453,47 @@ bool idVulkanRenderBackendPlatform::CreateLogicalDevice() {
 		queueCreateInfos.push_back( qci2 );
 	}
 
-	const char *deviceExtensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	bool useRT = idStr::Icmp( r_renderBackend.GetString(), "vulkan-ray" ) == 0;
 
-	VkPhysicalDeviceFeatures deviceFeatures = {};
-	deviceFeatures.samplerAnisotropy = VK_TRUE;
+	std::vector<const char *> devExts = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	if ( useRT ) {
+		devExts.push_back( VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME );
+		devExts.push_back( VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME );
+		devExts.push_back( VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME );
+		devExts.push_back( VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME );
+		devExts.push_back( VK_KHR_SPIRV_1_4_EXTENSION_NAME );
+		devExts.push_back( VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME );
+	}
+
+	// Build feature chain: use VkPhysicalDeviceFeatures2 + pNext when RT
+	// is enabled so we can enable RT-specific feature structs.
+	VkPhysicalDeviceBufferDeviceAddressFeaturesKHR bdaFeatures = {};
+	bdaFeatures.sType               = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR;
+	bdaFeatures.bufferDeviceAddress = VK_TRUE;
+
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures = {};
+	asFeatures.sType                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+	asFeatures.accelerationStructure = VK_TRUE;
+	asFeatures.pNext                 = &bdaFeatures;
+
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtFeatures = {};
+	rtFeatures.sType              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+	rtFeatures.rayTracingPipeline = VK_TRUE;
+	rtFeatures.pNext              = &asFeatures;
+
+	VkPhysicalDeviceFeatures2 features2 = {};
+	features2.sType                      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	features2.features.samplerAnisotropy = VK_TRUE;
+	features2.pNext                      = useRT ? (void *)&rtFeatures : NULL;
 
 	VkDeviceCreateInfo deviceCreateInfo = {};
-	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	deviceCreateInfo.queueCreateInfoCount = (uint32_t)queueCreateInfos.size();
-	deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
-	deviceCreateInfo.enabledExtensionCount = 1;
-	deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions;
-	deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+	deviceCreateInfo.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	deviceCreateInfo.pNext                   = &features2;   // use features2 chain
+	deviceCreateInfo.pEnabledFeatures        = NULL;         // must be NULL when pNext has features2
+	deviceCreateInfo.queueCreateInfoCount    = (uint32_t)queueCreateInfos.size();
+	deviceCreateInfo.pQueueCreateInfos       = queueCreateInfos.data();
+	deviceCreateInfo.enabledExtensionCount   = (uint32_t)devExts.size();
+	deviceCreateInfo.ppEnabledExtensionNames = devExts.data();
 
 	VkResult result = vkCreateDevice( physicalDevice, &deviceCreateInfo, NULL, &device );
 	if ( result != VK_SUCCESS ) {
@@ -461,6 +503,24 @@ bool idVulkanRenderBackendPlatform::CreateLogicalDevice() {
 
 	vkGetDeviceQueue( device, graphicsQueueFamily, 0, &graphicsQueue );
 	vkGetDeviceQueue( device, presentQueueFamily, 0, &presentQueue );
+
+	if ( useRT ) {
+		// Load RT extension function pointers
+#define LOAD_PFN( name ) \
+		pfn_##name = (PFN_##name)vkGetDeviceProcAddr( device, #name ); \
+		if ( !pfn_##name ) { common->Warning( "RT: failed to load " #name ); }
+		LOAD_PFN( vkCreateAccelerationStructureKHR )
+		LOAD_PFN( vkDestroyAccelerationStructureKHR )
+		LOAD_PFN( vkGetAccelerationStructureBuildSizesKHR )
+		LOAD_PFN( vkCmdBuildAccelerationStructuresKHR )
+		LOAD_PFN( vkGetAccelerationStructureDeviceAddressKHR )
+		LOAD_PFN( vkCreateRayTracingPipelinesKHR )
+		LOAD_PFN( vkGetRayTracingShaderGroupHandlesKHR )
+		LOAD_PFN( vkCmdTraceRaysKHR )
+		LOAD_PFN( vkGetBufferDeviceAddressKHR )
+#undef LOAD_PFN
+		common->Printf( "Vulkan ray tracing extension function pointers loaded\n" );
+	}
 
 	common->Printf( "Vulkan logical device created (graphics queue family %d, present queue family %d)\n",
 		graphicsQueueFamily, presentQueueFamily );

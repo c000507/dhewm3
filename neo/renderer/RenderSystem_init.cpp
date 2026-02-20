@@ -61,7 +61,7 @@ glconfig_t	glConfig;
 const char *r_rendererArgs[] = { "best", "arb2", NULL };
 
 #ifdef ID_VULKAN
-idCVar r_renderBackend( "r_renderBackend", "gl", CVAR_RENDERER | CVAR_ARCHIVE, "rendering backend: gl or vulkan" );
+idCVar r_renderBackend( "r_renderBackend", "gl", CVAR_RENDERER | CVAR_ARCHIVE, "rendering backend: gl, vulkan, or vulkan-ray" );
 #endif
 
 idCVar r_inhibitFragmentProgram( "r_inhibitFragmentProgram", "0", CVAR_RENDERER | CVAR_BOOL, "ignore the fragment program extension" );
@@ -2252,7 +2252,8 @@ void R_VidRestart_f( const idCmdArgs &args ) {
 		cvarSystem->SetCVarBool( "r_fullscreen", false );
 	}
 #ifdef ID_VULKAN
-	if ( idStr::Icmp( r_renderBackend.GetString(), "vulkan" ) == 0 ) {
+	if ( idStr::Icmp( r_renderBackend.GetString(), "vulkan" ) == 0
+		|| idStr::Icmp( r_renderBackend.GetString(), "vulkan-ray" ) == 0 ) {
 		R_InitVulkan();
 	} else
 #endif
@@ -2597,7 +2598,8 @@ idRenderSystemLocal::InitBackend
 */
 void idRenderSystemLocal::InitBackend( void ) {
 #ifdef ID_VULKAN
-	bool useVulkan = ( idStr::Icmp( r_renderBackend.GetString(), "vulkan" ) == 0 );
+	bool useVulkan = ( idStr::Icmp( r_renderBackend.GetString(), "vulkan" ) == 0
+		|| idStr::Icmp( r_renderBackend.GetString(), "vulkan-ray" ) == 0 );
 #else
 	bool useVulkan = false;
 #endif

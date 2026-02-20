@@ -175,6 +175,9 @@ RB_EnterWeaponDepthHack
 ===============
 */
 void RB_EnterWeaponDepthHack() {
+	if ( glConfig.isVulkan ) {
+		return;	// Vulkan handles depth hacks in VK_ComputeMVP via weaponDepthHack flag
+	}
 	qglDepthRange( 0, 0.5 );
 
 	float	matrix[16];
@@ -194,6 +197,9 @@ RB_EnterModelDepthHack
 ===============
 */
 void RB_EnterModelDepthHack( float depth ) {
+	if ( glConfig.isVulkan ) {
+		return;	// Vulkan handles depth hacks in VK_ComputeMVP via modelDepthHack field
+	}
 	qglDepthRange( 0.0f, 1.0f );
 
 	float	matrix[16];
@@ -213,6 +219,9 @@ RB_LeaveDepthHack
 ===============
 */
 void RB_LeaveDepthHack() {
+	if ( glConfig.isVulkan ) {
+		return;
+	}
 	qglDepthRange( 0, 1 );
 
 	qglMatrixMode(GL_PROJECTION);
