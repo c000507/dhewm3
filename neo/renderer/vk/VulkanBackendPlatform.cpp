@@ -356,19 +356,30 @@ bool idVulkanRenderBackendPlatform::SelectPhysicalDevice() {
 			continue;
 		}
 
-		// Check swapchain extension support
+		// Check extension support
 		uint32_t extCount = 0;
 		vkEnumerateDeviceExtensionProperties( devices[i], NULL, &extCount, NULL );
 		std::vector<VkExtensionProperties> exts( extCount );
 		vkEnumerateDeviceExtensionProperties( devices[i], NULL, &extCount, exts.data() );
+
 		bool hasSwapchain = false;
+		bool hasRT        = false;
 		for ( uint32_t e = 0; e < extCount; e++ ) {
 			if ( strcmp( exts[e].extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME ) == 0 ) {
 				hasSwapchain = true;
-				break;
+			}
+			if ( strcmp( exts[e].extensionName, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME ) == 0 ) {
+				hasRT = true;
 			}
 		}
 		if ( !hasSwapchain ) {
+			continue;
+		}
+
+		bool needRT = idStr::Icmp( r_renderBackend.GetString(), "vulkan-ray" ) == 0;
+		if ( needRT && !hasRT ) {
+			common->Printf( "  Vulkan device %d: %s — no ray tracing support, skipping\n",
+			                i, props.deviceName );
 			continue;
 		}
 
@@ -379,7 +390,8 @@ bool idVulkanRenderBackendPlatform::SelectPhysicalDevice() {
 			score = 100;
 		}
 
-		common->Printf( "  Vulkan device %d: %s (score %d)\n", i, props.deviceName, score );
+		common->Printf( "  Vulkan device %d: %s (score %d%s)\n",
+		                i, props.deviceName, score, hasRT ? ", RT" : "" );
 
 		if ( score > bestScore ) {
 			bestScore = score;
@@ -388,7 +400,13 @@ bool idVulkanRenderBackendPlatform::SelectPhysicalDevice() {
 	}
 
 	if ( bestDevice == VK_NULL_HANDLE ) {
-		common->Warning( "No suitable Vulkan device found" );
+		bool needRT = idStr::Icmp( r_renderBackend.GetString(), "vulkan-ray" ) == 0;
+		if ( needRT ) {
+			common->Warning( "No Vulkan device with ray tracing support found. "
+			                 "Use r_renderBackend vulkan for the rasterization backend." );
+		} else {
+			common->Warning( "No suitable Vulkan device found" );
+		}
 		return false;
 	}
 

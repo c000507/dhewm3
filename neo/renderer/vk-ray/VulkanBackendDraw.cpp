@@ -40,8 +40,10 @@ If you have questions concerning this license or the applicable additional terms
 #include "renderer/vk-ray/VulkanRTFuncs.h"
 #include "renderer/Image.h"
 #include "framework/Common.h"
+#include "sys/sys_public.h"
 #include <cmath>
 #include <cstring>
+#include <cstdio>
 #include <vector>
 
 // ---------------------------------------------------------------------------
@@ -121,6 +123,12 @@ private:
 
 	VkCommandBuffer		currentCmdBuf;
 	const viewDef_t *	currentViewDef;
+
+	// Benchmark recording state
+	FILE *   benchmarkFile       = nullptr;
+	int      benchmarkFrameCount = 0;
+	float    lastCamPos[3]       = {};
+	float    lastCamAngles[3]    = {};
 };
 
 // ---------------------------------------------------------------------------
@@ -192,6 +200,32 @@ void idRenderBackendDrawVulkanRay::Init() {
 
 	VK_LoadAllImages();
 
+	// Open benchmark output file
+	if ( com_benchmark.GetBool() ) {
+		char fname[256];
+		snprintf( fname, sizeof(fname), "benchmark_%lld.bin",
+		          (long long)Sys_Milliseconds() );
+		benchmarkFile = fopen( fname, "wb" );
+		if ( benchmarkFile ) {
+			// Write 24-byte file header
+			const char magic[8] = { 'R','T','B','E','N','C','H','1' };
+			uint32_t hdr[4] = {
+				1,                                               // version
+				0,                                               // flags (reserved)
+				(uint32_t)com_benchmarkPixels.GetInteger(),      // pixelsPerFrame
+				0                                                // reserved
+			};
+			fwrite( magic, 1, 8, benchmarkFile );
+			fwrite( hdr, 4, 4, benchmarkFile );
+
+			vkRayAccelMgr.SetBenchmarkFile( benchmarkFile );
+			vkRayPipelineMgr.ResetBenchmarkCounter();
+			common->Printf( "Benchmark file opened: %s\n", fname );
+		} else {
+			common->Warning( "Failed to open benchmark file: %s", fname );
+		}
+	}
+
 	initialized = true;
 	common->Printf( "Vulkan ray tracing backend initialized\n" );
 }
@@ -201,6 +235,15 @@ void idRenderBackendDrawVulkanRay::Shutdown() {
 
 	if ( vkState.device != VK_NULL_HANDLE ) {
 		frameSync.WaitIdle();
+	}
+
+	if ( benchmarkFile ) {
+		fflush( benchmarkFile );
+		fclose( benchmarkFile );
+		benchmarkFile = nullptr;
+		vkRayAccelMgr.SetBenchmarkFile( nullptr );
+		common->Printf( "Benchmark file closed (%d frames recorded)\n",
+		                benchmarkFrameCount );
 	}
 
 	if ( screenshotBuffer != VK_NULL_HANDLE ) {
@@ -284,6 +327,7 @@ void idRenderBackendDrawVulkanRay::HandleDrawView( const emptyCommand_t *cmd ) {
 
 	// --- Camera UBO: view→world and clip→view matrices ---
 	CameraUBO camUBO;
+	memset( &camUBO, 0, sizeof(camUBO) );
 	{
 		const idMat3 &axis = currentViewDef->renderView.viewaxis;
 		const idVec3 &org  = currentViewDef->renderView.vieworg;
@@ -298,6 +342,15 @@ void idRenderBackendDrawVulkanRay::HandleDrawView( const emptyCommand_t *cmd ) {
 		camUBO.viewInverse[14] = org[2];     camUBO.viewInverse[15] = 1.0f;
 		// projInverse (clip→view)
 		Mat4Inverse( currentViewDef->projectionMatrix, camUBO.projInverse );
+
+		// Benchmark pixel sampling rate (0 = disabled)
+		camUBO.benchmarkPixels = benchmarkFile
+			? (uint32_t)com_benchmarkPixels.GetInteger() : 0u;
+
+		// Cache cam position and angles for BVH frame header
+		lastCamPos[0] = org[0]; lastCamPos[1] = org[1]; lastCamPos[2] = org[2];
+		idAngles ang = axis.ToAngles();
+		lastCamAngles[0] = ang.pitch; lastCamAngles[1] = ang.yaw; lastCamAngles[2] = ang.roll;
 	}
 
 	VkBuffer     camBuf;
@@ -441,6 +494,30 @@ void idRenderBackendDrawVulkanRay::HandleSwapBuffers( const emptyCommand_t *cmd 
 	vkState.activeCommandBuffer = VK_NULL_HANDLE;
 	currentCmdBuf               = VK_NULL_HANDLE;
 	frameActive                 = false;
+
+	// Benchmark readback: GPU writes are visible after fence wait in EndFrame()
+	if ( benchmarkFile ) {
+		uint32_t count = 0;
+		const TrainingRecord *recs = nullptr;
+		vkRayPipelineMgr.ReadBenchmarkRecords( count, recs );
+
+		// Write SECTION_FRAME header + instance list to the file
+		vkRayAccelMgr.WriteBVHFrame( benchmarkFile, (uint32_t)benchmarkFrameCount,
+		                             lastCamPos, lastCamAngles, count );
+
+		// Append TrainingRecord array directly after the frame header
+		if ( count > 0 && recs ) {
+			fwrite( recs, sizeof(TrainingRecord), count, benchmarkFile );
+		}
+
+		vkRayPipelineMgr.ResetBenchmarkCounter();
+		benchmarkFrameCount++;
+
+		// Periodic flush every 100 frames to limit data loss on long runs
+		if ( benchmarkFrameCount % 100 == 0 ) {
+			fflush( benchmarkFile );
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------

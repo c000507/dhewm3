@@ -107,6 +107,13 @@ idCVar com_timescale( "timescale", "1", CVAR_SYSTEM | CVAR_FLOAT, "scales the ti
 idCVar com_makingBuild( "com_makingBuild", "0", CVAR_BOOL | CVAR_SYSTEM, "1 when making a build" );
 idCVar com_updateLoadSize( "com_updateLoadSize", "0", CVAR_BOOL | CVAR_SYSTEM | CVAR_NOCHEAT, "update the load size after loading a map" );
 
+idCVar com_benchmark       ( "com_benchmark",       "0",      CVAR_BOOL|CVAR_SYSTEM,
+    "benchmark mode: auto-load level, random-walk camera, record RT training data" );
+idCVar com_benchmarkFrames ( "com_benchmarkFrames", "100000", CVAR_INTEGER|CVAR_SYSTEM,
+    "number of frames to run before quitting" );
+idCVar com_benchmarkPixels ( "com_benchmarkPixels", "1000",   CVAR_INTEGER|CVAR_SYSTEM,
+    "pixels to sample for ray recording per frame" );
+
 idCVar com_enableDebuggerServer( "com_enableDebuggerServer", "0", CVAR_BOOL | CVAR_SYSTEM, "toggle debugger server and try to connect to com_dbgClientAdr" );
 idCVar com_dbgClientAdr( "com_dbgClientAdr", "localhost", CVAR_SYSTEM | CVAR_ARCHIVE, "debuggerApp client address" );
 idCVar com_dbgServerAdr( "com_dbgServerAdr", "localhost", CVAR_SYSTEM | CVAR_ARCHIVE, "debugger server address" );
@@ -891,6 +898,12 @@ void idCommonLocal::ParseCommandLine( int argc, char **argv ) {
 		if ( argv[ i ][ 0 ] == '+' ) {
 			com_numConsoleLines++;
 			com_consoleLines[ com_numConsoleLines-1 ].AppendArg( argv[ i ] + 1 );
+		} else if ( idStr::Icmp( argv[i], "-benchmark" ) == 0 ) {
+			// Treat as if user passed +set com_benchmark 1
+			com_numConsoleLines++;
+			com_consoleLines[ com_numConsoleLines-1 ].AppendArg( "set" );
+			com_consoleLines[ com_numConsoleLines-1 ].AppendArg( "com_benchmark" );
+			com_consoleLines[ com_numConsoleLines-1 ].AppendArg( "1" );
 		} else {
 			if ( !com_numConsoleLines ) {
 				com_numConsoleLines++;

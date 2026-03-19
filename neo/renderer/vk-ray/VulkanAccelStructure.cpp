@@ -440,6 +440,32 @@ VkDeviceAddress idVulkanAccelStructureMgr::GetOrBuildBLAS( const srfTriangles_t 
 	entry.deviceAddress = pfn_vkGetAccelerationStructureDeviceAddressKHR( device, &addrInfo );
 
 	blasCache[tri] = entry;
+
+	// --- Benchmark geometry export: write SECTION_MESH for new meshes ---
+	if ( benchmarkFile && meshIdCache.count( tri ) == 0 ) {
+		uint32_t mid = nextMeshId++;
+		meshIdCache[tri] = mid;
+
+		uint8_t  tag = 0x01;
+		uint32_t nv  = numVerts;
+		uint32_t ni  = numIndexes;
+		fwrite( &tag, 1, 1, benchmarkFile );
+		fwrite( &mid, 4, 1, benchmarkFile );
+		fwrite( &nv,  4, 1, benchmarkFile );
+		fwrite( &ni,  4, 1, benchmarkFile );
+
+		// Vertex positions only (xyz float, 12 bytes each)
+		for ( uint32_t vi = 0; vi < nv; vi++ ) {
+			fwrite( &tri->verts[vi].xyz, sizeof(float), 3, benchmarkFile );
+		}
+
+		// Indices as uint32
+		for ( uint32_t ii = 0; ii < ni; ii++ ) {
+			uint32_t idx = (uint32_t)tri->indexes[ii];
+			fwrite( &idx, 4, 1, benchmarkFile );
+		}
+	}
+
 	return entry.deviceAddress;
 }
 
@@ -456,6 +482,7 @@ VkAccelerationStructureKHR idVulkanAccelStructureMgr::BuildTLAS(
 	// Collect valid instances
 	std::vector<VkAccelerationStructureInstanceKHR> instances;
 	instances.reserve( numSurfs );
+	lastInstances.clear();
 
 	for ( int i = 0; i < numSurfs; i++ ) {
 		drawSurf_t *surf = surfs[i];
@@ -485,6 +512,17 @@ VkAccelerationStructureKHR idVulkanAccelStructureMgr::BuildTLAS(
 		inst.accelerationStructureReference         = blasAddr;
 
 		instances.push_back( inst );
+
+		// Cache instance data for benchmark BVH export
+		if ( benchmarkFile ) {
+			BenchInstance bi;
+			auto it = meshIdCache.find( surf->geo );
+			bi.meshId = ( it != meshIdCache.end() ) ? it->second : 0xFFFFFFFFu;
+			bi.transform[0] = M[0]; bi.transform[1] = M[4]; bi.transform[2]  = M[8];  bi.transform[3]  = M[12];
+			bi.transform[4] = M[1]; bi.transform[5] = M[5]; bi.transform[6]  = M[9];  bi.transform[7]  = M[13];
+			bi.transform[8] = M[2]; bi.transform[9] = M[6]; bi.transform[10] = M[10]; bi.transform[11] = M[14];
+			lastInstances.push_back( bi );
+		}
 	}
 
 	if ( instances.empty() ) return VK_NULL_HANDLE;
@@ -630,6 +668,33 @@ VkAccelerationStructureKHR idVulkanAccelStructureMgr::BuildTLAS(
 		0, 1, &tlasDone, 0, NULL, 0, NULL );
 
 	return tlas;
+}
+
+// ---------------------------------------------------------------------------
+// Benchmark BVH frame export
+// ---------------------------------------------------------------------------
+
+void idVulkanAccelStructureMgr::WriteBVHFrame( FILE *f, uint32_t frameNum,
+                                                const float camPos[3],
+                                                const float camAngles[3],
+                                                uint32_t numRecords )
+{
+	if ( !f ) return;
+
+	uint8_t  tag = 0x02;
+	uint32_t ni  = (uint32_t)lastInstances.size();
+
+	fwrite( &tag,        1,  1, f );
+	fwrite( &frameNum,   4,  1, f );
+	fwrite( &ni,         4,  1, f );
+	fwrite( &numRecords, 4,  1, f );
+	fwrite( camPos,      sizeof(float), 3, f );
+	fwrite( camAngles,   sizeof(float), 3, f );
+
+	for ( const BenchInstance &bi : lastInstances ) {
+		fwrite( &bi.meshId,    4, 1,  f );
+		fwrite( bi.transform,  4, 12, f );
+	}
 }
 
 #endif // ID_VULKAN

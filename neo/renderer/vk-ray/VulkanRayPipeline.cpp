@@ -34,6 +34,7 @@ If you have questions concerning this license or the applicable additional terms
 #include <cstring>
 #include <vector>
 #include <functional>
+#include <cstdint>
 
 // Embedded SPIR-V (generated at build time from RT shaders)
 #include "generated/rt_raygen_rgen_spv.h"
@@ -92,6 +93,12 @@ bool idVulkanRayPipelineManager::Init( VkDevice dev, VkPhysicalDevice phyDev,
 	if ( !CreatePipeline() ) return false;
 	if ( !CreateSBT() ) return false;
 
+	// Always allocate the benchmark SSBO (large in benchmark mode, stub otherwise).
+	// This keeps the descriptor set binding 4 valid in all cases.
+	if ( !CreateBenchmarkBuffer() ) {
+		common->Warning( "RayPipeline: failed to create benchmark buffer" );
+	}
+
 	// Bind the output image view to descriptor set binding 1 (static)
 	VkDescriptorImageInfo imgInfo = {};
 	imgInfo.imageView   = outputView;
@@ -115,6 +122,15 @@ void idVulkanRayPipelineManager::Shutdown() {
 	if ( !initialized ) return;
 
 	vkDeviceWaitIdle( device );
+
+	if ( benchmarkBuffer != VK_NULL_HANDLE ) {
+		if ( benchmarkMapped ) {
+			vkUnmapMemory( device, benchmarkMemory );
+			benchmarkMapped = nullptr;
+		}
+		vkDestroyBuffer( device, benchmarkBuffer, NULL );  benchmarkBuffer = VK_NULL_HANDLE;
+		vkFreeMemory( device, benchmarkMemory, NULL );     benchmarkMemory = VK_NULL_HANDLE;
+	}
 
 	if ( sbtBuffer   != VK_NULL_HANDLE ) { vkDestroyBuffer( device, sbtBuffer, NULL );   sbtBuffer  = VK_NULL_HANDLE; }
 	if ( sbtMemory   != VK_NULL_HANDLE ) { vkFreeMemory( device, sbtMemory, NULL );       sbtMemory  = VK_NULL_HANDLE; }
@@ -254,7 +270,8 @@ bool idVulkanRayPipelineManager::CreateDescriptorSetLayout() {
 	// Binding 1: storage image (output)
 	// Binding 2: camera UBO
 	// Binding 3: lights UBO
-	VkDescriptorSetLayoutBinding bindings[4] = {};
+	// Binding 4: benchmark SSBO (always present in layout; dummy buffer if disabled)
+	VkDescriptorSetLayoutBinding bindings[5] = {};
 
 	bindings[0].binding         = 0;
 	bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
@@ -276,9 +293,14 @@ bool idVulkanRayPipelineManager::CreateDescriptorSetLayout() {
 	bindings[3].descriptorCount = 1;
 	bindings[3].stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
+	bindings[4].binding         = 4;
+	bindings[4].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[4].descriptorCount = 1;
+	bindings[4].stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
 	VkDescriptorSetLayoutCreateInfo ci = {};
 	ci.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	ci.bindingCount = 4;
+	ci.bindingCount = 5;
 	ci.pBindings    = bindings;
 
 	if ( vkCreateDescriptorSetLayout( device, &ci, NULL, &descSetLayout ) != VK_SUCCESS ) {
@@ -289,18 +311,20 @@ bool idVulkanRayPipelineManager::CreateDescriptorSetLayout() {
 }
 
 bool idVulkanRayPipelineManager::CreateDescriptorPool() {
-	VkDescriptorPoolSize poolSizes[3] = {};
+	VkDescriptorPoolSize poolSizes[4] = {};
 	poolSizes[0].type            = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
 	poolSizes[0].descriptorCount = 1;
 	poolSizes[1].type            = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 	poolSizes[1].descriptorCount = 1;
 	poolSizes[2].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[2].descriptorCount = 2;
+	poolSizes[3].type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	poolSizes[3].descriptorCount = 1;
 
 	VkDescriptorPoolCreateInfo ci = {};
 	ci.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	ci.maxSets       = 1;
-	ci.poolSizeCount = 3;
+	ci.poolSizeCount = 4;
 	ci.pPoolSizes    = poolSizes;
 
 	if ( vkCreateDescriptorPool( device, &ci, NULL, &descPool ) != VK_SUCCESS ) {
@@ -582,7 +606,12 @@ void idVulkanRayPipelineManager::UpdateDescriptors(
 	lightInfo.offset = lightsOffset;
 	lightInfo.range  = sizeof(LightsUBO);
 
-	VkWriteDescriptorSet writes[3] = {};
+	VkDescriptorBufferInfo benchInfo = {};
+	benchInfo.buffer = benchmarkBuffer;
+	benchInfo.offset = 0;
+	benchInfo.range  = VK_WHOLE_SIZE;
+
+	VkWriteDescriptorSet writes[4] = {};
 
 	writes[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	writes[0].pNext           = &asWrite;
@@ -605,7 +634,14 @@ void idVulkanRayPipelineManager::UpdateDescriptors(
 	writes[2].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	writes[2].pBufferInfo     = &lightInfo;
 
-	vkUpdateDescriptorSets( device, 3, writes, 0, NULL );
+	writes[3].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[3].dstSet          = descSet;
+	writes[3].dstBinding      = 4;
+	writes[3].descriptorCount = 1;
+	writes[3].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	writes[3].pBufferInfo     = &benchInfo;
+
+	vkUpdateDescriptorSets( device, 4, writes, 0, NULL );
 }
 
 void idVulkanRayPipelineManager::BindAndTrace( VkCommandBuffer cmd,
@@ -690,6 +726,81 @@ void idVulkanRayPipelineManager::BlitToSwapchain( VkCommandBuffer cmd,
 		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT |
 		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
 		0, 0, NULL, 0, NULL, 2, postCopy );
+}
+
+// ---------------------------------------------------------------------------
+// Benchmark SSBO
+// ---------------------------------------------------------------------------
+
+bool idVulkanRayPipelineManager::CreateBenchmarkBuffer() {
+	// In benchmark mode, allocate MAX_BENCH_RECORDS records + 16-byte header.
+	// Otherwise allocate a minimal 256-byte stub so binding 4 is always valid.
+	VkDeviceSize bufSize = com_benchmark.GetBool()
+		? (VkDeviceSize)16 + MAX_BENCH_RECORDS * sizeof(TrainingRecord)
+		: 256;
+
+	VkBufferCreateInfo bci = {};
+	bci.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bci.size        = bufSize;
+	bci.usage       = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	if ( vkCreateBuffer( device, &bci, NULL, &benchmarkBuffer ) != VK_SUCCESS ) {
+		return false;
+	}
+
+	VkMemoryRequirements mr;
+	vkGetBufferMemoryRequirements( device, benchmarkBuffer, &mr );
+
+	VkMemoryAllocateInfo mai = {};
+	mai.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	mai.allocationSize  = mr.size;
+	mai.memoryTypeIndex = FindMemoryType( mr.memoryTypeBits,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT );
+	if ( mai.memoryTypeIndex == UINT32_MAX ) {
+		vkDestroyBuffer( device, benchmarkBuffer, NULL );
+		benchmarkBuffer = VK_NULL_HANDLE;
+		return false;
+	}
+
+	if ( vkAllocateMemory( device, &mai, NULL, &benchmarkMemory ) != VK_SUCCESS ) {
+		vkDestroyBuffer( device, benchmarkBuffer, NULL );
+		benchmarkBuffer = VK_NULL_HANDLE;
+		return false;
+	}
+	vkBindBufferMemory( device, benchmarkBuffer, benchmarkMemory, 0 );
+
+	// Persistent map (HOST_COHERENT: no explicit flush needed)
+	if ( vkMapMemory( device, benchmarkMemory, 0, bufSize, 0, &benchmarkMapped ) != VK_SUCCESS ) {
+		vkFreeMemory( device, benchmarkMemory, NULL );  benchmarkMemory = VK_NULL_HANDLE;
+		vkDestroyBuffer( device, benchmarkBuffer, NULL ); benchmarkBuffer = VK_NULL_HANDLE;
+		return false;
+	}
+
+	// Zero out (sets recordCount = 0 and clears padding)
+	memset( benchmarkMapped, 0, (size_t)bufSize );
+	return true;
+}
+
+void idVulkanRayPipelineManager::ResetBenchmarkCounter() {
+	if ( benchmarkMapped ) {
+		// First uint32 in the buffer is the record count
+		((uint32_t*)benchmarkMapped)[0] = 0u;
+		// HOST_COHERENT: no flush needed
+	}
+}
+
+void idVulkanRayPipelineManager::ReadBenchmarkRecords(
+	uint32_t &outCount, const TrainingRecord *&outRecords )
+{
+	if ( !benchmarkMapped ) {
+		outCount   = 0;
+		outRecords = nullptr;
+		return;
+	}
+	outCount = ((uint32_t*)benchmarkMapped)[0];
+	if ( outCount > MAX_BENCH_RECORDS ) outCount = MAX_BENCH_RECORDS;
+	outRecords = (const TrainingRecord*)((char*)benchmarkMapped + 16);
 }
 
 #endif // ID_VULKAN

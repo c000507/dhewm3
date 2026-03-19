@@ -4,6 +4,7 @@
 #define SAMPLES_PER_PIXEL 100
 #define MAX_BOUNCES       4
 #define MAX_LIGHT_SAMPLES 16   // cap per-light samples to limit divergence
+#define MAX_BENCH_RECORDS 200000
 
 layout(set=0, binding=0) uniform accelerationStructureEXT tlas;
 layout(set=0, binding=1, rgba8) uniform image2D outputImage;
@@ -11,6 +12,8 @@ layout(set=0, binding=1, rgba8) uniform image2D outputImage;
 layout(set=0, binding=2) uniform CameraUBO {
     mat4 viewInverse;
     mat4 projInverse;
+    uint benchmarkPixels;
+    uint cpad[3];
 } cam;
 
 layout(set=0, binding=3) uniform LightsUBO {
@@ -19,6 +22,20 @@ layout(set=0, binding=3) uniform LightsUBO {
     int   numLights;
     float lightDensity;     // light rays per unit of sphere radius
 } lights;
+
+struct TrainingRecord {
+    vec3  camPos;       float bounce;
+    vec3  hitPos;       float pad0;
+    vec3  hitNormal;    float pad1;
+    vec3  lightCenter;  float lightRadius;
+    vec3  sampleOrigin; uint  contributed;
+};
+
+layout(set=0, binding=4) buffer BenchmarkBuffer {
+    uint          recordCount;
+    uint          bpad[3];
+    TrainingRecord records[MAX_BENCH_RECORDS];
+} bench;
 
 struct HitPayload {
     vec3 worldPos;
@@ -61,19 +78,19 @@ vec3 sampleHemisphere(vec3 N, inout uint seed) {
     return normalize(T * cos(phi)*sinTheta + B * sin(phi)*sinTheta + N * cosTheta);
 }
 
-vec3 tracePath(vec2 pixel, vec2 imageSize, uint seed) {
+vec3 tracePath(vec2 pixel, vec2 imageSize, uint seed,
+               vec3 camOrigin, bool recording) {
     // Jitter within pixel for antialiasing
     vec2 jitter = vec2(rand(seed), rand(seed));
     vec2 uv = (pixel + jitter) / imageSize * 2.0 - 1.0;
 
-    vec4 origin    = cam.viewInverse * vec4(0.0, 0.0, 0.0, 1.0);
     vec4 target    = cam.projInverse * vec4(uv.x, -uv.y, 1.0, 1.0);
     vec4 direction = cam.viewInverse * vec4(normalize(target.xyz / target.w), 0.0);
 
     vec3 throughput = vec3(1.0);
     vec3 color      = vec3(0.0);
 
-    vec3 rayOrigin = origin.xyz;
+    vec3 rayOrigin = camOrigin;
     vec3 rayDir    = normalize(direction.xyz);
 
     for (int bounce = 0; bounce <= MAX_BOUNCES; bounce++) {
@@ -132,6 +149,23 @@ vec3 tracePath(vec2 pixel, vec2 imageSize, uint seed) {
                            * lights.colors[li].a
                            * NdotL * falloff * invN;
                 }
+
+                // --- Benchmark recording: write one TrainingRecord per first sample ---
+                if (recording && si == 0) {
+                    uint slot = atomicAdd(bench.recordCount, 1u);
+                    if (slot < MAX_BENCH_RECORDS) {
+                        bench.records[slot].camPos       = camOrigin;
+                        bench.records[slot].bounce       = float(bounce);
+                        bench.records[slot].hitPos       = P;
+                        bench.records[slot].pad0         = 0.0;
+                        bench.records[slot].hitNormal    = N;
+                        bench.records[slot].pad1         = 0.0;
+                        bench.records[slot].lightCenter  = Lpos;
+                        bench.records[slot].lightRadius  = Lradius;
+                        bench.records[slot].sampleOrigin = samplePos;
+                        bench.records[slot].contributed  = isShadowed ? 0u : 1u;
+                    }
+                }
             }
         }
 
@@ -153,10 +187,23 @@ void main() {
     // Per-pixel base seed mixed with frame-invariant value
     uint seed = pcg(uint(px.x) ^ (uint(px.y) << 16u));
 
+    // Camera origin (same for all samples in this pixel)
+    vec3 camOrigin = (cam.viewInverse * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+
+    // Determine whether this pixel should write benchmark records
+    uint totalPixels = gl_LaunchSizeEXT.x * gl_LaunchSizeEXT.y;
+    uint pixelIndex  = uint(px.y) * gl_LaunchSizeEXT.x + uint(px.x);
+    uint stride = (cam.benchmarkPixels > 0u)
+                ? max(1u, totalPixels / cam.benchmarkPixels)
+                : 0u;
+    bool shouldRecord = (stride > 0u) && (pixelIndex % stride == 0u);
+
     vec3 accum = vec3(0.0);
     for (int s = 0; s < SAMPLES_PER_PIXEL; s++) {
         seed = pcg(seed ^ uint(s * 1234567));
-        accum += tracePath(vec2(px), imageSize, seed);
+        // Only record on the first sample to avoid flooding the buffer
+        accum += tracePath(vec2(px), imageSize, seed,
+                           camOrigin, shouldRecord && (s == 0));
     }
 
     imageStore(outputImage, px, vec4(accum / float(SAMPLES_PER_PIXEL), 1.0));

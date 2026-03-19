@@ -34,6 +34,8 @@ If you have questions concerning this license or the applicable additional terms
 #include <vulkan/vulkan.h>
 #include <unordered_map>
 #include <functional>
+#include <vector>
+#include <cstdio>
 
 // Forward declarations using the typedef-compatible form
 struct srfTriangles_s;
@@ -52,6 +54,12 @@ struct blasEntry_t {
 	VkDeviceMemory              vertMem;
 	VkBuffer                    idxBuf;
 	VkDeviceMemory              idxMem;
+};
+
+// Per-instance data cached from the last BuildTLAS call (for benchmark export).
+struct BenchInstance {
+	uint32_t meshId;
+	float    transform[12];  // row-major 3×4, same as VkTransformMatrixKHR
 };
 
 // Manages BLAS (per-mesh) and TLAS (per-frame) acceleration structures
@@ -76,6 +84,16 @@ public:
 	VkAccelerationStructureKHR BuildTLAS( VkCommandBuffer cmd,
 	                                      drawSurf_t **surfs, int numSurfs );
 
+	// Benchmark geometry export API.
+	// Set by VulkanBackendDraw when benchmark file is open (non-owning pointer).
+	void SetBenchmarkFile( FILE *f ) { benchmarkFile = f; }
+
+	// Write SECTION_FRAME header + instance list to f, then TrainingRecord count.
+	// Call after BuildTLAS, before TraceRays.
+	void WriteBVHFrame( FILE *f, uint32_t frameNum,
+	                    const float camPos[3], const float camAngles[3],
+	                    uint32_t numRecords );
+
 private:
 	uint32_t FindMemoryType( uint32_t typeFilter, VkMemoryPropertyFlags props ) const;
 
@@ -95,6 +113,12 @@ private:
 	VkPhysicalDeviceMemoryProperties memProps;
 
 	std::unordered_map<const srfTriangles_t*, blasEntry_t> blasCache;
+
+	// Benchmark export state
+	FILE *     benchmarkFile  = nullptr;
+	uint32_t   nextMeshId     = 0;
+	std::unordered_map<const srfTriangles_t*, uint32_t> meshIdCache;
+	std::vector<BenchInstance> lastInstances;
 
 	VkAccelerationStructureKHR tlas;
 	VkBuffer                   tlasBuffer;

@@ -38,9 +38,26 @@ If you have questions concerning this license or the applicable additional terms
 #define RT_MAX_LIGHTS 32
 
 struct CameraUBO {
-	float viewInverse[16];  // column-major inverse-view matrix
-	float projInverse[16];  // column-major inverse-projection matrix
+	float    viewInverse[16];   // column-major inverse-view matrix
+	float    projInverse[16];   // column-major inverse-projection matrix
+	uint32_t benchmarkPixels;   // 0=disabled, N=sample approximately N pixels/frame
+	uint32_t pad[3];
 };
+
+// Benchmark training record written per sampled light-ray decision.
+// Layout matches GLSL std430; size = 64 bytes.
+struct TrainingRecord {
+	float    camPos[3];        // camera world position          (12)
+	float    bounce;           // bounce depth: 0=primary        (4)
+	float    hitPos[3];        // surface point being shaded     (12)
+	float    pad0;             //                                (4)
+	float    hitNormal[3];     // surface normal (approx)        (12)
+	float    pad1;             //                                (4)
+	float    lightCenter[3];   // light sphere centre            (12)
+	float    lightRadius;      //                                (4)
+	float    sampleOrigin[3];  // point on light sphere fired from (12)
+	uint32_t contributed;      // 1=unoccluded→contributed, 0=blocked (4)
+};  // 64 bytes total
 
 struct LightsUBO {
 	float positions[RT_MAX_LIGHTS][4];  // xyz=world position, w=sphere radius (world units)
@@ -49,6 +66,9 @@ struct LightsUBO {
 	float lightDensity;                 // light rays per unit of sphere radius
 	float pad[2];
 };
+
+// Maximum TrainingRecords per frame (≈12.8 MB SSBO).
+static constexpr uint32_t MAX_BENCH_RECORDS = 200000;
 
 // Manages the Vulkan ray tracing pipeline, descriptor layout, shader binding
 // table (SBT), and output storage image for the vulkan-ray backend.
@@ -68,6 +88,10 @@ public:
 
 	void BindAndTrace( VkCommandBuffer cmd, uint32_t width, uint32_t height );
 
+	// Benchmark SSBO helpers (no-ops when buffer is not allocated).
+	void ResetBenchmarkCounter();
+	void ReadBenchmarkRecords( uint32_t &outCount, const TrainingRecord *&outRecords );
+
 	// After TraceRays: transition output image → TRANSFER_SRC, copy to swapchain,
 	// transition back to GENERAL, transition swapchain to PRESENT_SRC.
 	void BlitToSwapchain( VkCommandBuffer cmd, VkImage swapchainImage,
@@ -83,6 +107,7 @@ private:
 	bool CreateDescriptorSet();
 	bool CreatePipeline();
 	bool CreateSBT();
+	bool CreateBenchmarkBuffer();
 
 	VkShaderModule LoadShaderModule( const uint32_t *spv, uint32_t bytes );
 
@@ -113,6 +138,11 @@ private:
 	VkStridedDeviceAddressRegionKHR missRegion;
 	VkStridedDeviceAddressRegionKHR hitRegion;
 	VkStridedDeviceAddressRegionKHR callableRegion;
+
+	// Benchmark recording SSBO (only allocated when com_benchmark is set)
+	VkBuffer       benchmarkBuffer  = VK_NULL_HANDLE;
+	VkDeviceMemory benchmarkMemory  = VK_NULL_HANDLE;
+	void *         benchmarkMapped  = nullptr;
 
 	uint32_t FindMemoryType( uint32_t filter, VkMemoryPropertyFlags props ) const;
 	void SubmitOneTime( std::function<void(VkCommandBuffer)> fn );

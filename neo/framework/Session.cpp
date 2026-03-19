@@ -36,6 +36,17 @@ If you have questions concerning this license or the applicable additional terms
 #include "renderer/ModelManager.h"
 
 #include "framework/Session_local.h"
+#include "framework/Common.h"
+#include <cstring>
+
+// ---------------------------------------------------------------------------
+// Benchmark mode state
+// ---------------------------------------------------------------------------
+static bool  benchmarkMapQueued = false;
+static int   s_benchFrame       = 0;
+static float s_benchYaw         = 0.0f;
+static int   s_benchYawHold     = 0;
+static bool  s_benchNoclipDone  = false;
 
 #if defined(__AROS__)
 #define CDKEY_FILEPATH CDKEY_FILE
@@ -2772,6 +2783,14 @@ void idSessionLocal::Frame() {
 
 	//------------ single player game tics --------------
 
+	// Benchmark mode: queue map load once before the map is spawned
+	if ( com_benchmark.GetBool() && !mapSpawned && !benchmarkMapQueued ) {
+		cmdSystem->BufferCommandText( CMD_EXEC_APPEND,
+			"set developer 1\n"
+			"devmap game/demo_mars_city1\n" );
+		benchmarkMapQueued = true;
+	}
+
 	if ( !mapSpawned || guiActive ) {
 		// early exit, won't do RunGameTic .. but still need to update mouse position for GUIs
 		usercmdGen->GetDirectUsercmd();
@@ -2897,6 +2916,31 @@ void idSessionLocal::RunGameTic() {
 		// get a locally created command
 		cmd = usercmdGen->GetDirectUsercmd();
 		lastGameTic++;
+	}
+
+	// Benchmark mode: override usercmd with synthetic random walk
+	if ( com_benchmark.GetBool() ) {
+		if ( !s_benchNoclipDone ) {
+			cmdSystem->BufferCommandText( CMD_EXEC_APPEND, "noclip\n" );
+			s_benchNoclipDone = true;
+		}
+
+		// Change yaw direction every 90–150 frames
+		if ( s_benchYawHold <= 0 ) {
+			uint32_t r    = (uint32_t)s_benchFrame * 2654435761u;
+			s_benchYaw    = (float)(r % 360) - 180.0f;
+			s_benchYawHold = 90 + (int)((r >> 24) % 60);
+		}
+		s_benchYawHold--;
+
+		memset( &cmd, 0, sizeof(cmd) );
+		cmd.forwardmove = 100;
+		cmd.angles[1]   = ANGLE2SHORT( s_benchYaw );  // index 1 = YAW
+
+		s_benchFrame++;
+		if ( s_benchFrame >= com_benchmarkFrames.GetInteger() ) {
+			cmdSystem->BufferCommandText( CMD_EXEC_APPEND, "quit\n" );
+		}
 	}
 
 	// run the game logic every player move
